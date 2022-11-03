@@ -117,15 +117,14 @@ public class SimSettings {
 
 	private String[] taskNames = null;
 
-	public SimSettings() {
+	private SimSettings() {
 		NUM_OF_PLACE_TYPES = 0;
-	}
-	
-	public static void initialize() {
-		instance = new SimSettings();
 	}
 
 	public static SimSettings getInstance() {
+		if(instance == null) {
+			instance = new SimSettings();
+		}
 		return instance;
 	}
 
@@ -631,7 +630,7 @@ public class SimSettings {
 					"vm_utilization_on_edge", //vm utilization on edge vm [0-100]
 					"vm_utilization_on_cloud", //vm utilization on cloud vm [0-100]
 					"vm_utilization_on_mobile", //vm utilization on mobile vm [0-100]
-					"delay_sensitivity"}; //delay_sensitivity [0-1]
+			"delay_sensitivity"}; //delay_sensitivity [0-1]
 
 			String optionalAttributes[] = {
 			"max_delay_requirement"}; //maximum delay requirement (sec)

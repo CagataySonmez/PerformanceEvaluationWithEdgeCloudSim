@@ -1,5 +1,4 @@
-# NetworkPerformanceEvaluation-EdgeCloudSim
-This repository is prepared for CMPE 523 Performance Evaluation of Computer Networks
-https://www.cmpe.boun.edu.tr/tr/courses/cmpe523
+# PerformanceEvaluationWithEdgeCloudSim
+This repository is prepared for CMPE 583 Sp. Tp. Edge Computing course
 
 You can find the presentation under the docs folder.
