@@ -41,8 +41,8 @@
 		<data_download>1000</data_download>
 		<task_length>9000</task_length>
 		<required_core>1</required_core>
-		<vm_utilization_on_edge>10</vm_utilization_on_edge>
-		<vm_utilization_on_cloud>1</vm_utilization_on_cloud>
+		<vm_utilization_on_edge>3.6</vm_utilization_on_edge>
+		<vm_utilization_on_cloud>0.36</vm_utilization_on_cloud>
 		<vm_utilization_on_mobile>0</vm_utilization_on_mobile>
 	</application>
 </applications>
