@@ -38,7 +38,7 @@ function [] = plotGenericLine(rowOfset, columnOfset, yLabel, appType, calculateP
             for j=1:numOfMobileDevices
                 try
                     mobileDeviceNumber = startOfMobileDeviceLoop + stepOfMobileDeviceLoop * (j-1);
-                    filePath = strcat(folderPath,'\ite',int2str(s),'\SIMRESULT_',char(scenarioType(i)),'_DEFAULT_POLICY_',int2str(mobileDeviceNumber),'DEVICES_',appType,'_GENERIC.log');
+                    filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_',char(scenarioType(i)),'_DEFAULT_POLICY_',int2str(mobileDeviceNumber),'DEVICES_',appType,'_GENERIC.log');
 
                     readData = dlmread(filePath,';',rowOfset,0);
                     value = readData(1,columnOfset);
@@ -200,7 +200,7 @@ function [] = plotGenericLine(rowOfset, columnOfset, yLabel, appType, calculateP
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'\',int2str(rowOfset),'_',int2str(columnOfset),'_',appType);
+        filename = strcat(folderPath,'/',int2str(rowOfset),'_',int2str(columnOfset),'_',appType);
         saveas(gcf, filename, 'pdf');
     end
 end

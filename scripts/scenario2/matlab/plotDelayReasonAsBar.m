@@ -17,7 +17,7 @@ function [] = plotDelayReasonAsBar(isEdge)
         for j=1:numOfMobileDevices
             try
                 mobileDeviceNumber = startOfMobileDeviceLoop + stepOfMobileDeviceLoop * (j-1);
-                filePath = strcat(folderPath,'\ite',int2str(s),'\SIMRESULT_DEFAULT_SCENARIO_EDGE_UTIL_HEURISTIC_',int2str(mobileDeviceNumber),'DEVICES_ALL_APPS_GENERIC.log');
+                filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_DEFAULT_SCENARIO_EDGE_UTIL_HEURISTIC_',int2str(mobileDeviceNumber),'DEVICES_ALL_APPS_GENERIC.log');
 
                 readData = dlmread(filePath,';',1,0);
                 value1 = 0;
@@ -91,7 +91,7 @@ function [] = plotDelayReasonAsBar(isEdge)
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'\',filename);
+        filename = strcat(folderPath,'/',filename);
         saveas(gcf, filename, 'pdf');
     end
 end

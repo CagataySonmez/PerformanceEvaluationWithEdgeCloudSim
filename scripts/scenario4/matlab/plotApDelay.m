@@ -14,8 +14,8 @@ function [] = plotApDelay()
         indexCounter = 1;
         for i=startOfMobileDeviceLoop:stepOfMobileDeviceLoop:endOfMobileDeviceLoop
             try
-                filePath1 = strcat(folderPath,'\ite',int2str(s),'\SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_AP_UPLOAD_DELAY.log');
-                filePath2 = strcat(folderPath,'\ite',int2str(s),'\SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_AP_DOWNLOAD_DELAY.log');
+                filePath1 = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_AP_UPLOAD_DELAY.log');
+                filePath2 = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_AP_DOWNLOAD_DELAY.log');
                 readData1 = dlmread(filePath1,';',60,0);
                 readData2 = dlmread(filePath2,';',60,0);
                 
@@ -107,7 +107,7 @@ function [] = plotApDelay()
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'\apDelay');
+        filename = strcat(folderPath,'/apDelay');
         saveas(gcf, filename, 'pdf');
     end
 end

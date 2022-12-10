@@ -16,7 +16,7 @@ function [] = plotLocation(placeCount)
         indexCounter = 1;
         for i=startOfMobileDeviceLoop:stepOfMobileDeviceLoop:endOfMobileDeviceLoop
             try
-                filePath = strcat(folderPath,'\ite',int2str(s),'\SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_LOCATION.log');
+                filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_LOCATION.log');
                 readData = dlmread(filePath,';',1,0);
 
                 for j=1:placeCount
@@ -61,7 +61,7 @@ function [] = plotLocation(placeCount)
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'\position');
+        filename = strcat(folderPath,'/position');
         saveas(gcf, filename, 'pdf');
     end
  

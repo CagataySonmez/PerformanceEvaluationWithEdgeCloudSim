@@ -4,13 +4,13 @@
 %--------------------------------------------------------------
 function [ret_val] = getConfiguration(argType)
     if(argType == 1)
-        ret_val = '..\..\..\sim_results\scenario4';
+        ret_val = '../../../sim_results/scenario4';
     elseif(argType == 2)
         ret_val = 15; %simulation time (in minutes)
     elseif(argType == 3)
-        ret_val = 10; %Number of iterations
+        ret_val = 5; %Number of iterations
     elseif(argType == 4)
-        ret_val = 2; %x tick interval for number of mobile devices
+        ret_val = 1; %x tick interval for number of mobile devices
     elseif(argType == 5)
         ret_val = {'RANDOM_CAPACITY','EQUAL_CAPACITY','TRAFFIC_HEURISTIC'};
     elseif(argType == 6)
@@ -30,9 +30,9 @@ function [ret_val] = getConfiguration(argType)
     elseif(argType == 17)
         ret_val = 0; %return 1 if you want to add 10^n text at x axis
     elseif(argType == 18)
-        ret_val = 0; %return 1 if you want to save figure as pdf
+        ret_val = 1; %return 1 if you want to save figure as pdf
     elseif(argType == 19)
-        ret_val = 1; %return 1 if you want to plot errors
+        ret_val = 0; %return 1 if you want to plot errors
     elseif(argType == 20)
         ret_val= 1; %return 1 if graph is plotted colerful
     elseif(argType == 21)
