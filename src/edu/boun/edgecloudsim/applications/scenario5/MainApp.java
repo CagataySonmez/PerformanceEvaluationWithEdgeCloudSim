@@ -33,10 +33,10 @@ public class MainApp {
 	 * Creates main() to run this example
 	 */
 	public static void main(String[] args) {
-		//disable console output of cloudsim library
+		//disable console output of CloudSim library
 		Log.disable();
 
-		//enable console output and file output of this application
+		//enable console output
 		SimLogger.enablePrintLog();
 
 		int iterationStart;
