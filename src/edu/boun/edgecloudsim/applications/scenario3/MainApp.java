@@ -110,7 +110,7 @@ public class MainApp {
 				}
 				else {
 					SimLogger.printLine("Output folder is not available; deleting '" + outputFolder + "'");
-					dir.mkdir();
+					dir.mkdirs();
 				}
 			}
 	
