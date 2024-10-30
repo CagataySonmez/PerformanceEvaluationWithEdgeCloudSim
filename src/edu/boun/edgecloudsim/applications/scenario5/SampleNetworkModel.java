@@ -56,45 +56,39 @@ public class SampleNetworkModel extends NetworkModel {
 	
 	private double calculateMM2(double propagationDelay, int bandwidth /*Kbps*/, double PoissonMean, double avgTaskSize /*KB*/, int deviceCount){
 		double Bps=0, mu=0, lamda=0;
-		double two = 2;
+		double four = 4, two = 2;
 
 		avgTaskSize = avgTaskSize * (double)1000; //convert from KB to Byte
 
 		Bps = bandwidth * (double)1000 / (double)8; //convert from Kbps to Byte per seconds
 		lamda = ((double)1/(double)PoissonMean)*(double)deviceCount; //task per seconds
 		mu = Bps / avgTaskSize ; //task per seconds
-		double result = ((double)4*mu) / ((two*mu-lamda) * (two*mu+lamda));
+		double result = (four*mu) / ((two*mu-lamda) * (two*mu+lamda));
 
 		result += propagationDelay;
 
 		return result;
 	}
 
-
 	@Override
 	public double getUploadDelay(int sourceDeviceId, int destDeviceId, Task task) {
 		double result = 0;
+		
+		int numDatacenter = SimSettings.getInstance().getNumOfEdgeDatacenters();
 
-		if(simScenario.equals("SCENARIO1")) {
+		if(simScenario.equals("SCENARIO2")) {
 			result = calculateMM2(0,
 					SimSettings.getInstance().getWlanBandwidth(),
 					poissonMean,
 					avgTaskOutputSize,
-					numberOfMobileDevices);
-		}
-		else if(simScenario.equals("SCENARIO2")) {
-			result = calculateMM2(0,
-					SimSettings.getInstance().getWlanBandwidth(),
-					poissonMean,
-					avgTaskOutputSize,
-					numberOfMobileDevices);
+					numberOfMobileDevices/numDatacenter);
 		}
 		else {
 			result = calculateMM1(0,
 					SimSettings.getInstance().getWlanBandwidth(),
 					poissonMean,
 					avgTaskOutputSize,
-					numberOfMobileDevices/2);
+					numberOfMobileDevices/numDatacenter);
 		}
 		
 		return result;

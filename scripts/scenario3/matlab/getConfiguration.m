@@ -6,7 +6,7 @@ function [ret_val] = getConfiguration(argType)
     if(argType == 1)
         ret_val = '../../../sim_results/scenario3';
     elseif(argType == 2)
-        ret_val = 15; %simulation time (in minutes)
+        ret_val = 30; %simulation time (in minutes)
     elseif(argType == 3)
         ret_val = 10; %Number of iterations
     elseif(argType == 4)

@@ -6,9 +6,9 @@ function [ret_val] = getConfiguration(argType)
     if(argType == 1)
         ret_val = '../../../sim_results/scenario5';
     elseif(argType == 2)
-        ret_val = 30; %simulation time (in minutes)
+        ret_val = 15; %simulation time (in minutes)
     elseif(argType == 3)
-        ret_val = 3; %Number of iterations
+        ret_val = 10; %Number of iterations
     elseif(argType == 4)
         ret_val = 1; %x tick interval for number of mobile devices
     elseif(argType == 5)

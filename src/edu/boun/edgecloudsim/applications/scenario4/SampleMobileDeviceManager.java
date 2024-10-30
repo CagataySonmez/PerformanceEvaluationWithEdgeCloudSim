@@ -218,7 +218,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 			System.exit(0);
 		}
 		
-		if(delay>0 || nextHopId == SimSettings.MOBILE_DATACENTER_ID){
+		if(delay>0){
 			
 			Vm selectedVM = SimManager.getInstance().getEdgeOrchestrator().getVmToOffload(task, nextHopId);
 			
@@ -237,11 +237,8 @@ private static final int BASE = 100000; //start from base in order not to confli
 				bindCloudletToVm(task.getCloudletId(), selectedVM.getId());
 
 				SimLogger.getInstance().taskStarted(task.getCloudletId(), CloudSim.clock());
-				
-				if(nextHopId != SimSettings.MOBILE_DATACENTER_ID) {
-					networkModel.uploadStarted(task.getSubmittedLocation(), nextDeviceForNetworkModel);
-					SimLogger.getInstance().setUploadDelay(task.getCloudletId(), delay, delayType);
-				}
+				networkModel.uploadStarted(task.getSubmittedLocation(), nextDeviceForNetworkModel);
+				SimLogger.getInstance().setUploadDelay(task.getCloudletId(), delay, delayType);
 
 				schedule(getId(), delay, nextEvent, task);
 			}

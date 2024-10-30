@@ -41,6 +41,7 @@ public class MainApp {
 
 		int iterationStart;
 		int iterationEnd;
+		boolean clearOutputFolder = true;
 		String configFile = null;
 		String outputFolder = null;
 		String edgeDevicesFile = null;
@@ -59,17 +60,20 @@ public class MainApp {
 		else{
 			SimLogger.printLine("Simulation setting file, output folder and iteration number are not provided! Using default ones...");
 			configFile = "scripts/" + SCENARIO_NAME + "/config/default_config1.properties";
-			applicationsFile = "scripts/" + SCENARIO_NAME + "/config/applications.xml";
+			applicationsFile = "scripts/" + SCENARIO_NAME + "/config/applications1.xml";
 			edgeDevicesFile = "scripts/" + SCENARIO_NAME + "/config/edge_devices1.xml";
 			
+			//Do not remove files in the output folder while using an IDE (eclipse etc)
+			//That means you need to clear iteration folders manually!
+			clearOutputFolder = false;
+			
 			// !! IMPORTANT NOTICE !!
-			// For those who are using IDE (eclipse etc) can modify
+			// For those who are using an IDE can modify
 			// -> iteration value to run a specific iteration
 			// -> iteration Start/End value to run multiple iterations at a time
 			//    in this case start shall be less than or equal to end value
-			int iteration = 1;
-			iterationStart = iteration;
-			iterationEnd = iteration;
+			iterationStart = 1;
+			iterationEnd = 10;
 		}
 
 		//load settings from configuration file
@@ -93,7 +97,7 @@ public class MainApp {
 			if(SS.getFileLoggingEnabled()){
 				SimLogger.enableFileLog();
 				File dir = new File(outputFolder);
-				if(dir.exists() && dir.isDirectory())
+				if(clearOutputFolder && dir.exists() && dir.isDirectory())
 				{
 					SimLogger.printLine("Output folder is available; cleaning '" + outputFolder + "'");
 					for (File f: dir.listFiles())

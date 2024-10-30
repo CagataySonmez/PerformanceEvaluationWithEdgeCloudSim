@@ -1,4 +1,4 @@
-function [] = plotGenericLine(rowOfset, columnOfset, yLabel, appType, calculatePercentage, legendPos, divisor, ignoreZeroValues, hideLowerValues, hideXAxis)
+function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculatePercentage, legendPos, divisor, ignoreZeroValues, hideLowerValues, hideXAxis)
     folderPath = getConfiguration(1);
     numOfSimulations = getConfiguration(3);
     stepOfxAxis = getConfiguration(4);
@@ -39,19 +39,26 @@ function [] = plotGenericLine(rowOfset, columnOfset, yLabel, appType, calculateP
                 try
                     mobileDeviceNumber = startOfMobileDeviceLoop + stepOfMobileDeviceLoop * (j-1);
                     filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_DEFAULT_SCENARIO_',char(scenarioType(i)),'_',int2str(mobileDeviceNumber),'DEVICES_',appType,'_GENERIC.log');
+        
+                    opts = detectImportOptions(filePath, 'Delimiter', ';'); % Set delimiter to ';'
+                    opts.DataLines = [rowOffset + 1, Inf]; % Start reading from specified row
+                    readData = readmatrix(filePath, opts);
 
-                    readData = dlmread(filePath,';',rowOfset,0);
-                    value = readData(1,columnOfset);
+                    value = readData(1,columnOffset);
+
                     if(strcmp(calculatePercentage,'percentage_of_all'))
-                        readData = dlmread(filePath,';',1,0);
+                        opts.DataLines = [2, Inf]; % Start reading from 2. row
+                        readData = readmatrix(filePath, opts);
                 		totalTask = readData(1,1)+readData(1,2);
                         value = (100 * value) / totalTask;
                     elseif(strcmp(calculatePercentage,'percentage_of_completed'))
-                        readData = dlmread(filePath,';',1,0);
+                        opts.DataLines = [2, Inf]; % Start reading from 2. row
+                        readData = readmatrix(filePath, opts);
                 		totalTask = readData(1,1);
                         value = (100 * value) / totalTask;
                     elseif(strcmp(calculatePercentage,'percentage_of_failed'))
-                        readData = dlmread(filePath,';',1,0);
+                        opts.DataLines = [2, Inf]; % Start reading from 2. row
+                        readData = readmatrix(filePath, opts);
                 		totalTask = readData(1,2);
                         value = (100 * value) / totalTask;
                     end
@@ -200,7 +207,7 @@ function [] = plotGenericLine(rowOfset, columnOfset, yLabel, appType, calculateP
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'/',int2str(rowOfset),'_',int2str(columnOfset),'_',appType);
+        filename = strcat(folderPath,'/',int2str(rowOfset),'_',int2str(columnOffset),'_',appType);
         saveas(gcf, filename, 'pdf');
     end
 end

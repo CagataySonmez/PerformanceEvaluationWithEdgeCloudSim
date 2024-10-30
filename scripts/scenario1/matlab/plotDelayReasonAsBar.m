@@ -19,7 +19,11 @@ function [] = plotDelayReasonAsBar(isEdge)
                 mobileDeviceNumber = startOfMobileDeviceLoop + stepOfMobileDeviceLoop * (j-1);
                 filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_DEFAULT_SCENARIO_WORST_FIT_',int2str(mobileDeviceNumber),'DEVICES_ALL_APPS_GENERIC.log');
 
-                readData = dlmread(filePath,';',1,0);
+                rowOffset=1;
+                opts = detectImportOptions(filePath, 'Delimiter', ';'); % Set delimiter to ';'
+                opts.DataLines = [rowOffset + 1, Inf]; % Start reading from specified row
+                readData = readmatrix(filePath, opts);
+                
                 value1 = 0;
                 value2 = 0;
                 if(isEdge == 1)

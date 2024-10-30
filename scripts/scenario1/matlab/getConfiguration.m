@@ -6,13 +6,13 @@ function [ret_val] = getConfiguration(argType)
     if(argType == 1)
         ret_val = '../../../sim_results/scenario1';
     elseif(argType == 2)
-        ret_val = 15; %simulation time (in minutes)
+        ret_val = 30; %simulation time (in minutes)
     elseif(argType == 3)
         ret_val = 10; %Number of iterations
     elseif(argType == 4)
         ret_val = 1; %x tick interval for number of mobile devices
     elseif(argType == 5)
-        ret_val = {'RANDOM_FIT','WORST_FIT','BEST_FIT','FIRST_FIT','NEXT_FIT'};;
+        ret_val = {'RANDOM_FIT','WORST_FIT','BEST_FIT','FIRST_FIT','NEXT_FIT'};
     elseif(argType == 6)
         ret_val = {'RND','WF','BF','FF','NF'};
     elseif(argType == 7)
@@ -32,7 +32,7 @@ function [ret_val] = getConfiguration(argType)
     elseif(argType == 18)
         ret_val = 0; %return 1 if you want to save figure as pdf
     elseif(argType == 19)
-        ret_val = 1; %return 1 if you want to plot errors
+        ret_val = 0; %return 1 if you want to plot errors
     elseif(argType == 20)
         ret_val= 1; %return 1 if graph is plotted colorful
     elseif(argType == 21)

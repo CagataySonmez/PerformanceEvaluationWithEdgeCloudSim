@@ -262,7 +262,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 		SimLogger.getInstance().setOrchestratorOverhead(task.getCloudletId(), estimatedTime);
 		
 		NETWORK_DELAY_TYPES delayType = NETWORK_DELAY_TYPES.WLAN_DELAY;
-		double delay = networkModel.getUploadDelay(task.getMobileDeviceId(), SimSettings.GENERIC_EDGE_DEVICE_ID, task);
+		double delay = networkModel.getUploadDelay(task.getMobileDeviceId(), nextHopId, task);
 		int vmType = SimSettings.VM_TYPES.EDGE_VM.ordinal();
 		int nextEvent = REQUEST_RECEIVED_BY_EDGE_DEVICE;
 		int nextDeviceForNetworkModel = SimSettings.GENERIC_EDGE_DEVICE_ID;

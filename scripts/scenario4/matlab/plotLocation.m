@@ -17,7 +17,11 @@ function [] = plotLocation(placeCount)
         for i=startOfMobileDeviceLoop:stepOfMobileDeviceLoop:endOfMobileDeviceLoop
             try
                 filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_TRAFFIC_HEURISTIC_DEFAULT_POLICY_',int2str(i),'DEVICES_LOCATION.log');
-                readData = dlmread(filePath,';',1,0);
+                
+                rowOffset = 1;
+                opts = detectImportOptions(filePath, 'Delimiter', ';'); % Set delimiter to ';'
+                opts.DataLines = [rowOffset + 1, Inf]; % Start reading from specified row
+                readData = readmatrix(filePath, opts);
 
                 for j=1:placeCount
                     results(indexCounter,j) = results(indexCounter,j) + mean(readData(:,j+1));
