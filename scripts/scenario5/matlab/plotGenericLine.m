@@ -42,8 +42,8 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
 
                     opts = detectImportOptions(filePath, 'Delimiter', ';'); % Set delimiter to ';'
                     opts.DataLines = [rowOffset + 1, Inf]; % Start reading from specified row
-                    
                     readData = readmatrix(filePath, opts);
+                    
                     value = readData(1,columnOffset);
                     if(strcmp(calculatePercentage,'percentage_of_all'))
                         opts.DataLines = [2, Inf]; % Start reading from 2. row
@@ -64,7 +64,7 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
 
                     all_results(s,i,j) = value;
                 catch err
-                    error(err.message)
+                    error(err)
                 end
             end
         end
@@ -103,7 +103,7 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
     
     for i=1:size(scenarioType,2)
         for j=1:numOfMobileDevices
-            x = all_results(:,i,j);                  % Create Data
+            x = all_results(:,i,j) / divisor;        % Create Data
             SEM = std(x)/sqrt(length(x));            % Standard Error
             ts = tinv([0.05  0.95],length(x)-1);     % T-Score
             CI = mean(x) + ts*SEM;                   % Confidence Intervals

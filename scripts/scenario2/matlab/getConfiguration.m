@@ -32,7 +32,7 @@ function [ret_val] = getConfiguration(argType)
     elseif(argType == 18)
         ret_val = 0; %return 1 if you want to save figure as pdf
     elseif(argType == 19)
-        ret_val = 0; %return 1 if you want to plot errors
+        ret_val = 1; %return 1 if you want to plot errors
     elseif(argType == 20)
         ret_val= 1; %return 1 if graph is plotted colorful
     elseif(argType == 21)

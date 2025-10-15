@@ -39,13 +39,12 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
                 try
                     mobileDeviceNumber = startOfMobileDeviceLoop + stepOfMobileDeviceLoop * (j-1);
                     filePath = strcat(folderPath,'/ite',int2str(s),'/SIMRESULT_DEFAULT_SCENARIO_',char(scenarioType(i)),'_',int2str(mobileDeviceNumber),'DEVICES_',appType,'_GENERIC.log');
-        
+
                     opts = detectImportOptions(filePath, 'Delimiter', ';'); % Set delimiter to ';'
                     opts.DataLines = [rowOffset + 1, Inf]; % Start reading from specified row
                     readData = readmatrix(filePath, opts);
-
+                    
                     value = readData(1,columnOffset);
-
                     if(strcmp(calculatePercentage,'percentage_of_all'))
                         opts.DataLines = [2, Inf]; % Start reading from 2. row
                         readData = readmatrix(filePath, opts);
@@ -104,9 +103,9 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
     
     for i=1:size(scenarioType,2)
         for j=1:numOfMobileDevices
-            x=all_results(:,i,j);                    % Create Data
+            x = all_results(:,i,j) / divisor;        % Create Data
             SEM = std(x)/sqrt(length(x));            % Standard Error
-            ts = tinv([0.05  0.95],length(x)-1);   % T-Score
+            ts = tinv([0.05  0.95],length(x)-1);     % T-Score
             CI = mean(x) + ts*SEM;                   % Confidence Intervals
 
             if(CI(1) < 0)
@@ -207,7 +206,7 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
         set(hFig, 'PaperPositionMode', 'manual');
         set(hFig, 'PaperPosition',[0 0 pos(3) pos(4)]);
         set(gcf, 'PaperSize', [pos(3) pos(4)]); %Keep the same paper size
-        filename = strcat(folderPath,'/',int2str(rowOfset),'_',int2str(columnOffset),'_',appType);
+        filename = strcat(folderPath,'/',int2str(rowOffset),'_',int2str(columnOffset),'_',appType);
         saveas(gcf, filename, 'pdf');
     end
 end

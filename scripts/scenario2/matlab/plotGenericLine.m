@@ -103,7 +103,7 @@ function [] = plotGenericLine(rowOffset, columnOffset, yLabel, appType, calculat
     
     for i=1:size(scenarioType,2)
         for j=1:numOfMobileDevices
-            x = all_results(:,i,j);                  % Create Data
+            x = all_results(:,i,j) / divisor;        % Create Data
             SEM = std(x)/sqrt(length(x));            % Standard Error
             ts = tinv([0.05  0.95],length(x)-1);     % T-Score
             CI = mean(x) + ts*SEM;                   % Confidence Intervals
