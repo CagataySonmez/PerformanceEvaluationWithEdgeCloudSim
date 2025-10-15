@@ -51,15 +51,15 @@ done
 for (( i=0; i<$num_of_processes; i++ ))
 do
 	chmod +x ${simulation_out_folder}/tmp_runner${i}.sh
-	${simulation_out_folder}/tmp_runner${i}.sh &
-
-# 	pid=$!
-#	cpu=$(($i % $num_of_cores))
-# 	taskset -cp $cpu,$cpu $pid
+	setsid ${simulation_out_folder}/tmp_runner${i}.sh &
+	pid=$!
+	echo $pid >> "${simulation_out_folder}/simulation_pids.txt"
 done
 
 echo "###############################################################"
 echo "                  SIMULARIONS ARE STARTED!"
+echo "###############################################################"
+echo "Simulation ID: ${date}"
 echo "###############################################################"
 echo "You can follow the progress via the following command"
 echo "tail -f <scenario_folder>/progress.log"
@@ -70,4 +70,9 @@ echo "You can inspect each iteration via the following command"
 echo "tail -f <scenario_folder>/ite[n].log"
 echo "e.g."
 echo "tail -f output/${date}/${scenario_name}/ite1.log"
+echo "###############################################################"
+echo "You can stop all simulations via the following command"
+echo "./stop_simulation.sh <simulation_id>"
+echo "e.g."
+echo "./stop_simulation.sh ${date}"
 echo "###############################################################"
