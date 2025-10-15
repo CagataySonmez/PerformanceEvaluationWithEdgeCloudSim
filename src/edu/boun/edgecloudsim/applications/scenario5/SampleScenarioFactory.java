@@ -26,6 +26,10 @@ import edu.boun.edgecloudsim.task_generator.IdleActiveLoadGenerator;
 import edu.boun.edgecloudsim.task_generator.LoadGeneratorModel;
 import edu.boun.edgecloudsim.network.NetworkModel;
 
+// Factory responsibilities:
+// - Centralizes creation of pluggable components for scenario5
+// - Encapsulates scenario parameters (device count, duration, policy, scenario label)
+// Extension points: replace returned implementations to customize behavior (mobility, network, orchestrator, etc.)
 public class SampleScenarioFactory implements ScenarioFactory {
 	private int numOfMobileDevice;
 	private double simulationTime;
@@ -36,6 +40,10 @@ public class SampleScenarioFactory implements ScenarioFactory {
 			double _simulationTime,
 			String _orchestratorPolicy,
 			String _simScenario){
+		// _numOfMobileDevice : total mobile devices
+		// _simulationTime    : total simulated seconds
+		// _orchestratorPolicy: offloading / placement policy id
+		// _simScenario       : scenario name used for conditional logic
 		orchestratorPolicy = _orchestratorPolicy;
 		numOfMobileDevice = _numOfMobileDevice;
 		simulationTime = _simulationTime;
@@ -44,41 +52,49 @@ public class SampleScenarioFactory implements ScenarioFactory {
 	
 	@Override
 	public LoadGeneratorModel getLoadGeneratorModel() {
+		// Provides per-device workload (idle/active cycles)
 		return new IdleActiveLoadGenerator(numOfMobileDevice, simulationTime, simScenario);
 	}
 
 	@Override
 	public EdgeOrchestrator getEdgeOrchestrator() {
+		// Offloading & VM selection strategy
 		return new SampleEdgeOrchestrator(orchestratorPolicy, simScenario);
 	}
 
 	@Override
 	public MobilityModel getMobilityModel() {
+		// Nomadic mobility pattern
 		return new NomadicMobility(numOfMobileDevice,simulationTime);
 	}
 
 	@Override
 	public NetworkModel getNetworkModel() {
+		// Analytical WLAN delay model (M/M/1 or M/M/2 depending on scenario)
 		return new SampleNetworkModel(numOfMobileDevice, simScenario);
 	}
 
 	@Override
 	public EdgeServerManager getEdgeServerManager() {
+		// Edge infrastructure provisioning (hosts/VMs)
 		return new DefaultEdgeServerManager();
 	}
 
 	@Override
 	public CloudServerManager getCloudServerManager() {
+		// Optional remote cloud resources
 		return new DefaultCloudServerManager();
 	}
 	
 	@Override
 	public MobileDeviceManager getMobileDeviceManager() throws Exception {
+		// Default mobile device task lifecycle manager
 		return new DefaultMobileDeviceManager();
 	}
 
 	@Override
 	public MobileServerManager getMobileServerManager() {
+		// Local (on-device) processing manager
 		return new DefaultMobileServerManager();
 	}
 }

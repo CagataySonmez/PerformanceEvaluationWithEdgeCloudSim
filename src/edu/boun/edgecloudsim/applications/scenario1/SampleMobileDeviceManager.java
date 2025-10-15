@@ -47,26 +47,40 @@ import edu.boun.edgecloudsim.utils.TaskProperty;
 import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimLogger;
 
+// Execution pipeline overview:
+// 1) submitTask(): create Task -> decide offloading target -> choose VM -> initiate upload
+// 2) REQUEST_* events: emulate network hops (WLAN / MAN) until task reaches serving edge
+// 3) Task executes on VM (CloudSim handles execution)
+// 4) processCloudletReturn(): generate response path (direct or via relay)
+// 5) RESPONSE_* events: emulate download and finalize logging
+// Fail cases tracked: insufficient bandwidth, mobility-induced disconnection, VM capacity rejection.
+// Time measurements: orchestrator overhead (ns), upload/download delays, execution start/end.
+
 public class SampleMobileDeviceManager extends MobileDeviceManager {
+	// Base value chosen to avoid collision with CloudSim's internal tag space.
 	private static final int BASE = 100000; //start from base in order not to conflict cloudsim tag!
 	
-	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE = BASE + 1;
-	private static final int REQUEST_RECEIVED_BY_REMOTE_EDGE_DEVICE = BASE + 2;
-	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_NEIGHBOR = BASE + 3;
-	private static final int RESPONSE_RECEIVED_BY_MOBILE_DEVICE = BASE + 4;
-	private static final int RESPONSE_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_MOBILE_DEVICE = BASE + 5;
+	// Event tags for custom network traversal state machine:
+	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE = BASE + 1; // local edge got upload
+	private static final int REQUEST_RECEIVED_BY_REMOTE_EDGE_DEVICE = BASE + 2; // neighbor/remote edge got relay upload
+	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_NEIGHBOR = BASE + 3; // local edge will forward to neighbor (MAN hop)
+	private static final int RESPONSE_RECEIVED_BY_MOBILE_DEVICE = BASE + 4; // final response arrived to device
+	private static final int RESPONSE_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_MOBILE_DEVICE = BASE + 5; // remote edge sends response to original edge for WLAN relay
 	
-	private int taskIdCounter=0;
+	private int taskIdCounter=0; // monotonically increasing local task id (per device manager instance)
 	
 	public SampleMobileDeviceManager() throws Exception{
 	}
 
 	@Override
 	public void initialize() {
+		// No pre-allocation needed; networking & mobility fetched on demand.
+		// Could cache model references here for micro optimizations.
 	}
 	
 	@Override
 	public UtilizationModel getCpuUtilizationModel() {
+		// Custom model provides per-task predicted CPU percentage for placement decisions.
 		return new CpuUtilizationModel_Custom();
 	}
 	
@@ -93,6 +107,10 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 	 * @post $none
 	 */
 	protected void processCloudletReturn(SimEvent ev) {
+		// Called when task execution completes at the edge VM.
+		// Decide whether response needs relay (if served by foreign WLAN zone).
+		// Apply mobility-aware validation before scheduling download.
+		
 		NetworkModel networkModel = SimManager.getInstance().getNetworkModel();
 		Task task = (Task) ev.getData();
 		
@@ -112,6 +130,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 		//if neighbour edge device is selected
 		if(host.getLocation().getServingWlanId() != task.getSubmittedLocation().getServingWlanId())
 		{
+			// if neighbor edge served the task, reroute through MAN back to original edge before WLAN delivery
 			delay = networkModel.getDownloadDelay(SimSettings.GENERIC_EDGE_DEVICE_ID, SimSettings.GENERIC_EDGE_DEVICE_ID, task);
 			nextEvent = RESPONSE_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_MOBILE_DEVICE;
 			nextDeviceForNetworkModel = SimSettings.GENERIC_EDGE_DEVICE_ID + 1;
@@ -130,16 +149,22 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			}
 			else
 			{
+				// Mobility check: ensure device still in original WLAN after simulated download delay
 				SimLogger.getInstance().failedDueToMobility(task.getCloudletId(), CloudSim.clock());
 			}
 		}
 		else
 		{
+			// Failure branches:
+			//  - delay <= 0 : bandwidth saturated
+			//  - WLAN changed: mobility-induced failure
 			SimLogger.getInstance().failedDueToBandwidth(task.getCloudletId(), CloudSim.clock(), delayType);
 		}
 	}
 	
 	protected void processOtherEvent(SimEvent ev) {
+		// Central dispatcher for custom network traversal events.
+		// Each case advances the finite state machine for request/response.
 		if (ev == null) {
 			SimLogger.printLine(getName() + ".processOtherEvent(): " + "Error - an event is null! Terminating simulation...");
 			System.exit(0);
@@ -151,6 +176,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 		switch (ev.getTag()) {
 			case REQUEST_RECEIVED_BY_EDGE_DEVICE:
 			{
+				// Local edge receives task -> finish WLAN upload -> submit to VM
 				Task task = (Task) ev.getData();
 				networkModel.uploadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID);
 				submitTaskToVm(task, SimSettings.VM_TYPES.EDGE_VM);
@@ -158,6 +184,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			}
 			case REQUEST_RECEIVED_BY_REMOTE_EDGE_DEVICE:
 			{
+				// Remote edge (neighbor) receives relayed task via MAN -> submit to VM
 				Task task = (Task) ev.getData();
 				networkModel.uploadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID+1);
 				submitTaskToVm(task, SimSettings.VM_TYPES.EDGE_VM);
@@ -166,6 +193,8 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			}
 			case REQUEST_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_NEIGHBOR:
 			{
+				// Local edge decides to forward to neighbor (capacity / policy reason)
+				// Start MAN upload; on success schedule remote edge receive event.
 				Task task = (Task) ev.getData();
 				networkModel.uploadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID);
 				
@@ -177,7 +206,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 				}
 				else
 				{
-					//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
+					// If MAN bandwidth unavailable -> reject due to MAN bandwidth
 					SimLogger.getInstance().rejectedDueToBandwidth(
 							task.getCloudletId(),
 							CloudSim.clock(),
@@ -189,6 +218,8 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			}
 			case RESPONSE_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_MOBILE_DEVICE:
 			{
+				// Remote edge finished execution; sending result back to original edge via MAN then WLAN last hop.
+				// Mobility check performed after MAN leg before WLAN leg scheduling.
 				Task task = (Task) ev.getData();
 				networkModel.downloadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID+1);
 				
@@ -218,6 +249,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			}
 			case RESPONSE_RECEIVED_BY_MOBILE_DEVICE:
 			{
+				// Final delivery; mark task completion (success path).
 				Task task = (Task) ev.getData();
 				
 				if(task.getAssociatedDatacenterId() == SimSettings.CLOUD_DATACENTER_ID)
@@ -229,6 +261,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 				break;
 			}
 			default:
+				// Defensive: unexpected tag indicates logic/config error.
 				SimLogger.printLine(getName() + ".processOtherEvent(): " + "Error - event unknown by this DatacenterBroker. Terminating simulation...");
 				System.exit(0);
 				break;
@@ -236,6 +269,16 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 	}
 
 	public void submitTask(TaskProperty edgeTask) {
+		// Entry point for generating and offloading a new task instance.
+		// Steps:
+		// 1) Instantiate Task + assign submission location
+		// 2) Log metadata (for post-simulation analysis)
+		// 3) Query orchestrator: device target
+		// 4) Measure orchestrator decision latency (nanoseconds)
+		// 5) Compute upload delay; if >0 attempt VM selection
+		// 6) If VM capacity available: bind, schedule network upload event chain
+		// 7) Else: log rejection (capacity or bandwidth)
+		
 		NetworkModel networkModel = SimManager.getInstance().getNetworkModel();
 		
 		//create a task
@@ -290,6 +333,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 					
 					//if neighbour edge device is selected
 					if(host.getLocation().getServingWlanId() != task.getSubmittedLocation().getServingWlanId()){
+						// For neighbor edge, we alter the first network event to relay path
 						nextEvent = REQUEST_RECEIVED_BY_EDGE_DEVICE_TO_RELAY_NEIGHBOR;
 					}
 				}
@@ -301,18 +345,24 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 				schedule(getId(), delay, nextEvent, task);
 			}
 			else{
-				//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
+				// Failures:
+				//  - selectedVM == null -> no VM capacity
+				//  - delay <= 0 -> insufficient uplink bandwidth
 				SimLogger.getInstance().rejectedDueToVMCapacity(task.getCloudletId(), CloudSim.clock(), vmType);
 			}
 		}
 		else
 		{
-			//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
+			// Failures:
+			//  - selectedVM == null -> no VM capacity
+			//  - delay <= 0 -> insufficient uplink bandwidth
 			SimLogger.getInstance().rejectedDueToBandwidth(task.getCloudletId(), CloudSim.clock(), vmType, delayType);
 		}
 	}
 	
 	private void submitTaskToVm(Task task, SimSettings.VM_TYPES vmType) {
+		// Immediate (zero-delay) submission to the target VM's datacenter broker mapping.
+		// Logging captures placement tuple for traceability.
 		//SimLogger.printLine(CloudSim.clock() + ": Cloudlet#" + task.getCloudletId() + " is submitted to VM#" + task.getVmId());
 		schedule(getVmsToDatacentersMap().get(task.getVmId()), 0, CloudSimTags.CLOUDLET_SUBMIT, task);
 
@@ -324,6 +374,10 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 	}
 	
 	private Task createTask(TaskProperty edgeTask){
+		// Builds a Task (Cloudlet) with:
+		//  - Custom CPU utilization model (predictive dynamic utilization)
+		//  - Full (constant) utilization for RAM and BW models
+		// Binds task back into utilization model for feedback-based prediction.
 		UtilizationModel utilizationModel = new UtilizationModelFull(); /*UtilizationModelStochastic*/
 		UtilizationModel utilizationModelCPU = getCpuUtilizationModel();
 
@@ -340,6 +394,7 @@ public class SampleMobileDeviceManager extends MobileDeviceManager {
 			((CpuUtilizationModel_Custom)utilizationModelCPU).setTask(task);
 		}
 		
+		// link reverse reference for dynamic prediction
 		return task;
 	}
 }

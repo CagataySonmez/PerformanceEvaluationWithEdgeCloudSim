@@ -27,14 +27,25 @@ import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimLogger;
 
 public class SampleNetworkModel extends NetworkModel {
+	// Overview:
+	// - Maintains concurrent user counts per WLAN (edge AP) and WAN link.
+	// - Uses empirical per-user aggregate throughput tables (Kbps) to derive transfer delay.
+	// - MAN (edge-to-edge relay) modeled with constant internal LAN delay (from settings).
+	// - Upload and download assumed symmetric for WAN and WLAN in this simplified model.
+	// Delay formula: delay_seconds = (data_size_KB * 8 bits_per_byte) / effective_throughput_Kbps
+	// WLAN adjustment: divides by (throughput * 3) to approximate 802.11ac vs 802.11n speed gain.
+
 	public static enum NETWORK_TYPE {WLAN, LAN};
 	public static enum LINK_TYPE {DOWNLOAD, UPLOAD};
 
 	@SuppressWarnings("unused")
-	private int manClients;
-	private int[] wanClients;
-	private int[] wlanClients;
-	
+	private int manClients; // active MAN relay transfers (edge<->edge); single shared queue abstraction
+	private int[] wanClients;  // active WAN sessions per WLAN zone (indexed by servingWlanId)
+	private int[] wlanClients; // active WLAN sessions per WLAN zone
+
+	// Empirical per-user WLAN aggregate throughput (Kbps).
+	// Index == number of concurrent WLAN clients. Used to approximate contention impact.
+	// Note: duplicate comment "15 Clients" in source preserved; second value actually for 16? Kept intact for compatibility.
 	public static final double[] experimentalWlanDelay = {
 		/*1 Client*/ 88040.279 /*(Kbps)*/,
 		/*2 Clients*/ 45150.982 /*(Kbps)*/,
@@ -139,6 +150,7 @@ public class SampleNetworkModel extends NetworkModel {
 		/*100 Clients*/ 1500.631 /*(Kbps)*/
 	};
 	
+	// Empirical per-user WAN throughput (Kbps) for upstream/downstream symmetry assumption.
 	public static final double[] experimentalWanDelay = {
 		/*1 Client*/ 20703.973 /*(Kbps)*/,
 		/*2 Clients*/ 12023.957 /*(Kbps)*/,
@@ -173,19 +185,26 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void initialize() {
+		// One WAN and WLAN access point per edge datacenter (servingWlanId acts as index).
+		// Arrays store current concurrent session counts used to pick throughput entries.
 		wanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 		wlanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 	}
 
     /**
-    * source device is always mobile device in our simulation scenarios!
-    */
+	 * Upload delay from mobile to target device.
+	 * Branches:
+	 *  - MAN relay (edge->edge): constant internal LAN delay
+	 *  - Cloud: WAN empirical table
+	 *  - Edge: WLAN empirical table
+	 */
 	@Override
 	public double getUploadDelay(int sourceDeviceId, int destDeviceId, Task task) {
 		double delay = 0;
 		
 		//special case for man communication
 		if(sourceDeviceId == destDeviceId && sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID){
+			// Special MAN case: same generic edge ID used as placeholder (relay hop)
 			return delay = getManUploadDelay();
 		}
 		
@@ -197,6 +216,7 @@ public class SampleNetworkModel extends NetworkModel {
 		}
 		//mobile device to edge device (wifi access point)
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID) {
+			// Fetch current WLAN zone of mobile for throughput lookup
 			delay = getWlanUploadDelay(accessPointLocation, task.getCloudletFileSize());
 		}
 		
@@ -204,14 +224,16 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 
     /**
-    * destination device is always mobile device in our simulation scenarios!
-    */
+	 * Download delay to mobile from source device.
+	 * Symmetric logic to upload with MAN shortcut.
+	 */
 	@Override
 	public double getDownloadDelay(int sourceDeviceId, int destDeviceId, Task task) {
 		double delay = 0;
 		
 		//special case for man communication
 		if(sourceDeviceId == destDeviceId && sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID){
+			// Special MAN case
 			return delay = getManDownloadDelay();
 		}
 		
@@ -223,6 +245,7 @@ public class SampleNetworkModel extends NetworkModel {
 		}
 		//edge device (wifi access point) to mobile device
 		else{
+			// Destination (mobile) current WLAN determines contention level
 			delay = getWlanDownloadDelay(accessPointLocation, task.getCloudletOutputSize());
 		}
 		
@@ -231,6 +254,8 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadStarted(Location accessPointLocation, int destDeviceId) {
+		// Increment concurrent session counters to reflect resource occupation.
+		// Consistency: every started must have matching finished for accurate contention.
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]++;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -245,6 +270,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadFinished(Location accessPointLocation, int destDeviceId) {
+		// Decrement counters; negative values would indicate logic errors (not checked here).
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]--;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -286,6 +312,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 
 	private double getWlanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Convert KB -> Kb, then divide by empirical throughput (adjusted x3 for 802.11ac uplift).
+		// If #users exceeds table length => result stays 0 (interpreted as bandwidth failure upstream).
 		int numOfWlanUser = wlanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -297,12 +325,13 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wlan upload and download delay is symmetric in this model
+	// WLAN upload mirrors download (symmetric assumption).
 	private double getWlanUploadDelay(Location accessPointLocation, double dataSize) {
 		return getWlanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
 	private double getWanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Similar to WLAN formula without 802.11ac multiplier (table already calibrated).
 		int numOfWanUser = wanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -315,13 +344,14 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wan upload and download delay is symmetric in this model
+	// WAN upload mirrors download (symmetric assumption).
 	private double getWanUploadDelay(Location accessPointLocation, double dataSize) {
 		return getWanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
 	
 	private double getManDownloadDelay() {
+		// Constant latency model for internal MAN (could be replaced by queue model).
 		return SimSettings.getInstance().getInternalLanDelay();
 	}
 	

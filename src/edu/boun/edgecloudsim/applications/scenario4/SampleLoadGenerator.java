@@ -19,15 +19,18 @@ public class SampleLoadGenerator extends LoadGeneratorModel{
 
 	@Override
 	public void initializeModel() {
+		// Allocate list for all scheduled tasks (absolute submission times)
 		taskList = new ArrayList<TaskProperty>();
 
 		//Each mobile device utilises an app type (task type)
 		taskTypeOfDevices = new int[numberOfMobileDevices];
 		for(int i=0; i<numberOfMobileDevices; i++) {
+			// Choose task type according to cumulative usage percentages
 			int randomTaskType = -1;
 			double taskTypeSelector = SimUtils.getRandomDoubleNumber(0,100);
 			double taskTypePercentage = 0;
 			for (int j=0; j<SimSettings.getInstance().getTaskLookUpTable().length; j++) {
+				// Cumulative probability walk; assumes percentages sum ~100 (tolerant to rounding).
 				taskTypePercentage += SimSettings.getInstance().getTaskLookUpTable()[j][0];
 				if(taskTypeSelector <= taskTypePercentage){
 					randomTaskType = j;
@@ -45,6 +48,7 @@ public class SampleLoadGenerator extends LoadGeneratorModel{
 			double activePeriod = SimSettings.getInstance().getTaskLookUpTable()[randomTaskType][3];
 			double idlePeriod = SimSettings.getInstance().getTaskLookUpTable()[randomTaskType][4];
 			double activePeriodStartTime = SimUtils.getRandomDoubleNumber(
+					// Random offset reduces phase alignment (thundering herd) at simulation start.
 					SimSettings.CLIENT_ACTIVITY_START_TIME, 
 					SimSettings.CLIENT_ACTIVITY_START_TIME * 2);  //active period starts shortly after the simulation started (e.g. 10 seconds)
 			double virtualTime = activePeriodStartTime;
@@ -54,7 +58,10 @@ public class SampleLoadGenerator extends LoadGeneratorModel{
 			//for(int j=0; j<10; j++)
 			//	rng[j] = new ExponentialDistribution(poissonMean * ((double)1 + (double)j * (double) 0.12));
 
+			// Exponential inter-arrival distribution (memoryless arrivals within active window)
 			while(virtualTime < simulationTime) {
+				// For heavy-tailed variants, replace Exponential with Pareto / Weibull here.
+				// Skip zero/negative intervals (rare numeric edge case)
 				//int index = Math.min(9, (int)virtualTime / 15);
 				//double interval = rng[9-index].sample();
 				double interval = rng.sample();
@@ -66,12 +73,16 @@ public class SampleLoadGenerator extends LoadGeneratorModel{
 				//SimLogger.printLine(virtualTime + " -> " + interval + " for device " + i + " time ");
 				virtualTime += interval;
 
+				// Active/Idle model: device alternates between activePeriod and idlePeriod windows
+				// Start time randomized in [CLIENT_ACTIVITY_START_TIME, 2*CLIENT_ACTIVITY_START_TIME]
 				if(virtualTime > activePeriodStartTime + activePeriod){
+					// Switch to next active window; idle gap skipped without arrivals.
 					activePeriodStartTime = activePeriodStartTime + activePeriod + idlePeriod;
 					virtualTime = activePeriodStartTime;
 					continue;
 				}
 
+				// Introduce +/-10% variability around nominal input/output/length values
 				long inputFileSize = (long)SimSettings.getInstance().getTaskLookUpTable()[randomTaskType][5];
 				long inputFileSizeBias = inputFileSize / 10;
 
@@ -83,18 +94,20 @@ public class SampleLoadGenerator extends LoadGeneratorModel{
 
 				int pesNumber = (int)SimSettings.getInstance().getTaskLookUpTable()[randomTaskType][8];
 
+				// Bias = 10% gives modest variability; tune to model QoS sensitivity or network jitter.
 				inputFileSize = SimUtils.getRandomLongNumber(inputFileSize - inputFileSizeBias, inputFileSize + inputFileSizeBias);
 				outputFileSize = SimUtils.getRandomLongNumber(outputFileSize - outputFileSizeBias, outputFileSize + outputFileSizeBias);
 				length = SimUtils.getRandomLongNumber(length - lengthBias, length + lengthBias);
 
+				// Persist task specification
 				taskList.add(new TaskProperty(virtualTime, i, randomTaskType, pesNumber, length, inputFileSize, outputFileSize));
 			}
 		}
+		// Consider sorting taskList by submission time if downstream components assume ordered arrivals.
 	}
-
 	@Override
 	public int getTaskTypeOfDevice(int deviceId) {
-		// TODO Auto-generated method stub
+		// Direct lookup of assigned static task type for device
 		return taskTypeOfDevices[deviceId];
 	}
 

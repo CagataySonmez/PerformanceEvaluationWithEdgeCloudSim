@@ -48,9 +48,9 @@ import edu.boun.edgecloudsim.utils.SimLogger;
 public class SampleMobileDeviceManager extends MobileDeviceManager {
 private static final int BASE = 100000; //start from base in order not to conflict cloudsim tag!
 	
-	private static final int SET_DELAY_LOG = BASE + 1;
-	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE = BASE + 2;
-	private static final int RESPONSE_RECEIVED_BY_MOBILE_DEVICE = BASE + 3;
+	private static final int SET_DELAY_LOG = BASE + 1; // Periodic AP delay sampling event
+	private static final int REQUEST_RECEIVED_BY_EDGE_DEVICE = BASE + 2; // After uplink completes
+	private static final int RESPONSE_RECEIVED_BY_MOBILE_DEVICE = BASE + 3; // After downlink completes
 
 	private int taskIdCounter=0;
 	
@@ -69,7 +69,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 	@Override
 	public void startEntity() {
 		super.startEntity();
-		
+		// Kick off periodic AP delay logging (passive probe model).
 		if(SimSettings.getInstance().getApDelayLogInterval() != 0)
 			schedule(getId(), SimSettings.getInstance().getApDelayLogInterval(), SET_DELAY_LOG);
 	}
@@ -92,6 +92,8 @@ private static final int BASE = 100000; //start from base in order not to confli
 	 * @post $none
 	 */
 	protected void processCloudletReturn(SimEvent ev) {
+		// Called once execution completes at edge VM; handles only WLAN downlink in this scenario.
+		// Mobility re-check ensures stale results are discarded if user roamed to different AP.
 		NetworkModel networkModel = SimManager.getInstance().getNetworkModel();
 		Task task = (Task) ev.getData();
 		
@@ -105,6 +107,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 				Location currentLocation = SimManager.getInstance().getMobilityModel().getLocation(task.getMobileDeviceId(),CloudSim.clock()+delay);
 				if(task.getSubmittedLocation().getServingWlanId() == currentLocation.getServingWlanId())
 				{
+					// Device still anchored to same WLAN: proceed with downlink
 					networkModel.downloadStarted(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID);
 					SimLogger.getInstance().setDownloadDelay(task.getCloudletId(), delay, NETWORK_DELAY_TYPES.WLAN_DELAY);
 					
@@ -112,6 +115,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 				}
 				else
 				{
+					// Mobility-induced failure: no handover continuation logic implemented.
 					SimLogger.getInstance().failedDueToMobility(task.getCloudletId(), CloudSim.clock());
 				}
 			}
@@ -121,6 +125,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 			}
 		}
 		else {
+			// Defensive: only single generic edge DC supported in this simplified scenario.
 			SimLogger.printLine("Unknown datacenter id! Terminating simulation...");
 			System.exit(0);
 		}
@@ -138,6 +143,8 @@ private static final int BASE = 100000; //start from base in order not to confli
 		switch (ev.getTag()) {
 			case SET_DELAY_LOG:
 			{
+				// Samples representative AP RTT components via synthetic 1MB probe.
+				// TODO: Replace static indices with iteration over all APs if full visibility needed.
 				int dataSize = 1024; //estimate network delay for 1MB
 				int[] indices = {0,3,5};
 				double apUploadDelays[] = new double[indices.length];
@@ -153,6 +160,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 			}
 			case REQUEST_RECEIVED_BY_EDGE_DEVICE:
 			{
+				// Uplink finished; submit to VM scheduler immediately (no queueing delay modeled here).
 				Task task = (Task) ev.getData();
 				networkModel.uploadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID);
 				submitTaskToVm(task, SimSettings.VM_TYPES.EDGE_VM);
@@ -160,6 +168,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 			}
 			case RESPONSE_RECEIVED_BY_MOBILE_DEVICE:
 			{
+				// Final step: task result delivered; logging end time.
 				Task task = (Task) ev.getData();
 				
 				networkModel.downloadFinished(task.getSubmittedLocation(), SimSettings.GENERIC_EDGE_DEVICE_ID);
@@ -175,6 +184,14 @@ private static final int BASE = 100000; //start from base in order not to confli
 	}
 
 	public void submitTask(TaskProperty edgeTask) {
+		// End-to-end submission pipeline:
+		// 1) Create task
+		// 2) Ask orchestrator for destination device
+		// 3) Compute uplink delay
+		// 4) Reserve VM (bind) or reject due to capacity/bandwidth
+		// 5) Schedule arrival at edge
+		// Orchestrator call & overhead timing isolated here; suitable for profiling policy complexity.
+		// If future cloud support is added, extend switch on nextHopId.
 		double delay = 0;
 		int nextEvent = 0;
 		int nextDeviceForNetworkModel = 0;
@@ -203,10 +220,12 @@ private static final int BASE = 100000; //start from base in order not to confli
 		long startTime = System.nanoTime();   
 		int nextHopId = SimManager.getInstance().getEdgeOrchestrator().getDeviceToOffload(task);
 		long estimatedTime = System.nanoTime() - startTime;
+		// NOTE: Overhead captured at nanosecond granularity; aggregate externally if needed.
 
 		SimLogger.getInstance().setOrchestratorOverhead(task.getCloudletId(), estimatedTime);
 		
 		if(nextHopId == SimSettings.GENERIC_EDGE_DEVICE_ID){
+			// Currently only local generic edge path supported.
 			delay = networkModel.getUploadDelay(task.getMobileDeviceId(), nextHopId, task);
 			vmType = SimSettings.VM_TYPES.EDGE_VM;
 			nextEvent = REQUEST_RECEIVED_BY_EDGE_DEVICE;
@@ -214,15 +233,20 @@ private static final int BASE = 100000; //start from base in order not to confli
 			nextDeviceForNetworkModel = SimSettings.GENERIC_EDGE_DEVICE_ID;
 		}
 		else {
+			// TODO: Extend for WAN / cloud / multi-tier orchestration.
 			SimLogger.printLine("Unknown nextHopId! Terminating simulation...");
 			System.exit(0);
 		}
 		
 		if(delay>0){
+			// Positive uplink delay -> attempt capacity placement
 			
 			Vm selectedVM = SimManager.getInstance().getEdgeOrchestrator().getVmToOffload(task, nextHopId);
 			
 			if(selectedVM != null){
+				// Binding occurs before network transfer completes (optimistic reservation).
+				// Consider deferred binding if contention modeling is required.
+
 				//set related host id
 				task.setAssociatedDatacenterId(nextHopId);
 
@@ -243,13 +267,12 @@ private static final int BASE = 100000; //start from base in order not to confli
 				schedule(getId(), delay, nextEvent, task);
 			}
 			else{
-				//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
+				// All candidate VMs saturated -> capacity rejection.
 				SimLogger.getInstance().rejectedDueToVMCapacity(task.getCloudletId(), CloudSim.clock(), vmType.ordinal());
 			}
 		}
-		else
-		{
-			//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
+		else {
+			// Bandwidth zero or negative (no residual share) -> immediate rejection.
 			SimLogger.getInstance().rejectedDueToBandwidth(task.getCloudletId(), CloudSim.clock(), vmType.ordinal(), delayType);
 		}
 	}
@@ -266,6 +289,8 @@ private static final int BASE = 100000; //start from base in order not to confli
 	}
 	
 	private Task createTask(TaskProperty edgeTask){
+		// Constructs Task and associates a CPU utilization model for dynamic consumption profile.
+		// NOTE: RAM and BW models kept full; adapt if finer resource contention required.
 		UtilizationModel utilizationModel = new UtilizationModelFull(); /*UtilizationModelStochastic*/
 		UtilizationModel utilizationModelCPU = getCpuUtilizationModel();
 
@@ -279,6 +304,7 @@ private static final int BASE = 100000; //start from base in order not to confli
 		task.setTaskType(edgeTask.getTaskType());
 		
 		if (utilizationModelCPU instanceof SampleCpuUtilizationModel) {
+			// Provide back-reference so utilization model can inspect task parameters.
 			((SampleCpuUtilizationModel)utilizationModelCPU).setTask(task);
 		}
 		

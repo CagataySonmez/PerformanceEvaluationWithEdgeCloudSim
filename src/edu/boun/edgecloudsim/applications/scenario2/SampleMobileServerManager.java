@@ -35,11 +35,22 @@ import edu.boun.edgecloudsim.edge_client.mobile_processing_unit.MobileServerMana
 import edu.boun.edgecloudsim.edge_client.mobile_processing_unit.MobileVM;
 import edu.boun.edgecloudsim.edge_client.mobile_processing_unit.MobileVmAllocationPolicy_Custom;
 
+/*
+ * Responsibilities:
+ * - Provision a single shared "mobile" datacenter hosting one MobileHost+MobileVM per device
+ * - Expose per-host and global utilization metrics for orchestrator heuristics
+ * Assumptions:
+ * - Exactly one VM per mobile device (simplifies selection and accounting)
+ * - Mobile datacenter costs are zero (no billing model)
+ * - Bandwidth set to 0 (network modeled externally)
+ * Extension points: override createHosts/createVmList for heterogeneous devices.
+ */
+
 public class SampleMobileServerManager extends MobileServerManager{
-	private int numOfMobileDevices=0;
+	private int numOfMobileDevices=0; // total mobile devices => also number of mobile hosts/VMs
 	
 	public SampleMobileServerManager(int _numOfMobileDevices) {
-		numOfMobileDevices=_numOfMobileDevices;
+		numOfMobileDevices=_numOfMobileDevices; // store population size
 	}
 
 	@Override
@@ -53,9 +64,7 @@ public class SampleMobileServerManager extends MobileServerManager{
 
 	@Override
 	public void startDatacenters() throws Exception {
-		//in the initial version, each mobile device has a separate datacenter
-		//however, this approach encounters with out of memory (oom) problem.
-		//therefore, we use single datacenter for all mobile devices!
+		// Single shared datacenter avoids OOM risk of per-device datacenters
 		localDatacenter = createDatacenter(SimSettings.MOBILE_DATACENTER_ID);
 	}
 
@@ -66,7 +75,8 @@ public class SampleMobileServerManager extends MobileServerManager{
 
 	@Override
 	public void createVmList(int brokerId) {
-		//VMs should have unique IDs, so create Mobile VMs after Edge+Cloud VMs
+		// VM IDs must be globally unique: offset after edge + cloud VMs
+		// One MobileVM per device (index aligned with device id)
 		int vmCounter=SimSettings.getInstance().getNumOfEdgeVMs() + SimSettings.getInstance().getNumOfCloudVMs();
 		
 		//Create VMs for each hosts
@@ -90,6 +100,7 @@ public class SampleMobileServerManager extends MobileServerManager{
 
 	@Override
 	public double getAvgUtilization() {
+		// Aggregate CPU utilization across all mobile VMs at current simulation time
 		double totalUtilization = 0;
 		double vmCounter = 0;
 
@@ -108,6 +119,7 @@ public class SampleMobileServerManager extends MobileServerManager{
 	}
 
 	public double getAvgHostUtilization(int hostIndex) {
+		// Mean utilization across VMs on a specific mobile host (currently always 1 VM)
 		double totalUtilization = 0;
 		double vmCounter = 0;
 
@@ -122,6 +134,7 @@ public class SampleMobileServerManager extends MobileServerManager{
 	}
 
 	private Datacenter createDatacenter(int index) throws Exception{
+		// Build datacenter characteristics with zero pricing; hosts derived from createHosts()
 		String arch = "x86";
 		String os = "Linux";
 		String vmm = "Xen";
@@ -153,6 +166,12 @@ public class SampleMobileServerManager extends MobileServerManager{
 	}
 	
 	private List<MobileHost> createHosts(){
+		// Creates one MobileHost per device; IDs offset after edge+cloud hosts
+		// Each host configured homogeneously using mobile VM settings
+		// Steps:
+		// 1) Build PE list
+		// 2) Instantiate MobileHost with SpaceShared scheduler
+		// 3) Tag host with its mobileDeviceId for lookup
 		// Here are the steps needed to create a PowerDatacenter:
 		// 1. We need to create a list to store one or more Machines
 		List<MobileHost> hostList = new ArrayList<MobileHost>();

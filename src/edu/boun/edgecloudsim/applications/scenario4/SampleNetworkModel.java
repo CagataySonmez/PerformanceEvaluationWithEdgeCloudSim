@@ -173,6 +173,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void initialize() {
+		// Arrays sized once; if dynamic AP provisioning is added, convert to resizable structure.
 		wanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 		wlanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 	}
@@ -286,6 +287,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 	
 	public double estimateWlanDownloadDelay(int accessPointID, double dataSize) {
+		// Helper excludes mobility check; used for predictive logging or heuristic scheduling.
+		// dataSize assumed KB; converted internally to Kb.
 		int numOfWlanUser = wlanClients[accessPointID];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -302,6 +305,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 
 	private double getWlanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Guard: if numOfWlanUser >= table length => result=0 (interpreted as saturated / failure upstream).
+		// Extend: could add interpolation for >100 users by extrapolating last slope.
 		int numOfWlanUser = wlanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -319,6 +324,7 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 	
 	private double getWanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Similar to WLAN but without 802.11ac scaling factor (/3 divisor not applied).
 		int numOfWanUser = wanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -338,6 +344,7 @@ public class SampleNetworkModel extends NetworkModel {
 	
 	
 	private double getManDownloadDelay() {
+		// Enhancement point: replace constant delay with queue model (e.g., M/M/1) if needed.
 		return SimSettings.getInstance().getInternalLanDelay();
 	}
 	
@@ -345,3 +352,10 @@ public class SampleNetworkModel extends NetworkModel {
 		return SimSettings.getInstance().getInternalLanDelay();
 	}
 }
+
+// Model summary:
+// - WLAN & WAN delays derived from empirical throughput tables indexed by active client count.
+// - MAN represented as constant internal LAN delay (no queueing dynamics here).
+// - Upload/download assumed symmetric per link type.
+// - If client count exceeds table bounds result remains 0 (interpreted upstream as bandwidth failure).
+// - estimateWlan* methods provided for external predictors (e.g., orchestrator heuristics).

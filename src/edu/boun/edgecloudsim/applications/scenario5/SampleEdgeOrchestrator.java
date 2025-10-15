@@ -27,6 +27,14 @@ import edu.boun.edgecloudsim.edge_orchestrator.EdgeOrchestrator;
 import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimUtils;
 
+// Responsibilities:
+// - Decide offloading target (fixed to generic edge datacenter in this scenario)
+// - Select an edge VM in the mobile device's serving WLAN (one host per WLAN)
+// Policy here: RANDOM FIT within serving host with a capacity check.
+// Capacity terms:
+//   requiredCapacity = predicted CPU utilization (%) for this task on VM type
+//   targetVmCapacity = residual CPU capacity (%) = 100 - current utilization
+// Returns null if randomly chosen VM cannot host (caller handles rejection).
 public class SampleEdgeOrchestrator extends EdgeOrchestrator {
 	
 	public SampleEdgeOrchestrator(String _policy, String _simScenario) {
@@ -39,6 +47,7 @@ public class SampleEdgeOrchestrator extends EdgeOrchestrator {
 
 	@Override
 	public int getDeviceToOffload(Task task) {
+		// Always offload to edge (no cloud/mobile local decision logic in this scenario)
 		return SimSettings.GENERIC_EDGE_DEVICE_ID;
 	}
 	
@@ -46,14 +55,15 @@ public class SampleEdgeOrchestrator extends EdgeOrchestrator {
 	public Vm getVmToOffload(Task task, int deviceId) {
 		Vm selectedVM = null;
 		
-		//in this scenario, clients can only offload to edge servers located in the serving WLAN place
-		//serving wlan ID is equal to the host id because there is only one host in one place
+		// Determine serving WLAN -> host id (assumption: 1 host per WLAN region)
 		Location deviceLocation = SimManager.getInstance().getMobilityModel().getLocation(task.getMobileDeviceId(), CloudSim.clock());
 		int relatedHostId=deviceLocation.getServingWlanId();
 		
 		List<EdgeVM> vmArray = SimManager.getInstance().getEdgeServerManager().getVmList(relatedHostId);
 		int randomIndex = SimUtils.getRandomNumber(0, vmArray.size()-1);
 		
+		// RANDOM selection among VMs on that host
+		// Predictive utilization vs residual capacity check
 		double requiredCapacity = ((CpuUtilizationModel_Custom)task.getUtilizationModelCpu()).predictUtilization(vmArray.get(randomIndex).getVmType());
 		double targetVmCapacity = (double)100 - vmArray.get(randomIndex).getCloudletScheduler().getTotalUtilizationOfCpu(CloudSim.clock());
 		if(requiredCapacity <= targetVmCapacity)
@@ -62,22 +72,18 @@ public class SampleEdgeOrchestrator extends EdgeOrchestrator {
 		return selectedVM;
 	}
 	
-
 	@Override
 	public void processEvent(SimEvent arg0) {
-		// TODO Auto-generated method stub
-		
+		// No asynchronous events handled (stateless orchestrator)
 	}
 
 	@Override
 	public void shutdownEntity() {
-		// TODO Auto-generated method stub
-		
+		// No resources to release
 	}
 
 	@Override
 	public void startEntity() {
-		// TODO Auto-generated method stub
-		
+		// No startup scheduling needed
 	}
 }

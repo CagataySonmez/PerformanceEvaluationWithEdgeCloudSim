@@ -33,10 +33,10 @@ public class MainApp {
 	 * Creates main() to run this example
 	 */
 	public static void main(String[] args) {
-		//disable console output of CloudSim library
+		// Suppress default CloudSim console output; EdgeCloudSim uses SimLogger
 		Log.disable();
 
-		//enable console output
+		// Enable EdgeCloudSim console logging (file logging may also be enabled)
 		SimLogger.enablePrintLog();
 
 		int iterationStart;
@@ -46,6 +46,8 @@ public class MainApp {
 		String edgeDevicesFile = null;
 		String applicationsFile = null;
 
+		// Argument parsing: expecting [config edge_devices applications output iteration]
+		// Defaults chosen for convenience in IDE context
 		//Command line arguments will be properly provided by our simulation runner scripts.
 		//IDE users mostly do not provide simulation configuration files and iteration value!
 		if (args.length == EXPECTED_NUM_OF_ARGS){
@@ -57,6 +59,7 @@ public class MainApp {
 			iterationEnd = iterationStart;
 		}
 		else{
+			// Inform user about fallback to packaged defaults
 			SimLogger.printLine("Simulation setting file, output folder and iteration number are not provided! Using default ones...");
 			configFile = "scripts/" + SCENARIO_NAME + "/config/default_config.properties";
 			applicationsFile = "scripts/" + SCENARIO_NAME + "/config/applications.xml";
@@ -72,6 +75,7 @@ public class MainApp {
 			iterationEnd = iteration;
 		}
 
+		// Initialize global simulation settings and abort on failure
 		//load settings from configuration file
 		SimSettings SS = SimSettings.getInstance();
 		if(SS.initialize(configFile, edgeDevicesFile, applicationsFile) == false){
@@ -79,6 +83,7 @@ public class MainApp {
 			System.exit(0);
 		}
 		
+		// Timestamp formatter for human-readable scenario start/end logs
 		DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 		Date SimulationStartDate = Calendar.getInstance().getTime();
 		String now = df.format(SimulationStartDate);
@@ -86,18 +91,21 @@ public class MainApp {
 		SimLogger.printLine("----------------------------------------------------------------------");
 		
 		for(int iterationNumber=iterationStart; iterationNumber<=iterationEnd; iterationNumber++) {
-			
+			// Auto-generate iteration-specific output folder when running with defaults
 			if (args.length != EXPECTED_NUM_OF_ARGS)
 				outputFolder = "sim_results/" + SCENARIO_NAME + "/ite" + iterationNumber;
 			
 			if(SS.getFileLoggingEnabled()){
+				// Prepare result directory: clean existing files or create fresh folder
 				SimLogger.enableFileLog();
 				File dir = new File(outputFolder);
 				if(dir.exists() && dir.isDirectory())
 				{
+					// Remove stale files from previous runs to ensure reproducibility
 					SimLogger.printLine("Output folder is available; cleaning '" + outputFolder + "'");
 					for (File f: dir.listFiles())
 					{
+						// Delete only regular files (ignore directories)
 						if (f.exists() && f.isFile())
 						{
 							if(!f.delete())
@@ -109,17 +117,22 @@ public class MainApp {
 					}
 				}
 				else {
+					// Create directory tree if absent
 					SimLogger.printLine("Output folder is not available; deleting '" + outputFolder + "'");
 					dir.mkdirs();
 				}
 			}
 	
+			// Loop over mobile device counts (scaling experiments)
 			for(int j=SS.getMinNumOfMobileDev(); j<=SS.getMaxNumOfMobileDev(); j+=SS.getMobileDevCounterSize())
 			{
+				// Loop over configured scenario variants
 				for(int k=0; k<SS.getSimulationScenarios().length; k++)
 				{
+					// Loop over orchestrator policies (offloading / placement strategies)
 					for(int i=0; i<SS.getOrchestratorPolicies().length; i++)
 					{
+						// Log scenario header (factors + iteration)
 						String simScenario = SS.getSimulationScenarios()[k];
 						String orchestratorPolicy = SS.getOrchestratorPolicies()[i];
 						Date ScenarioStartDate = Calendar.getInstance().getTime();
@@ -132,8 +145,11 @@ public class MainApp {
 	
 						try
 						{
-							// First step: Initialize the CloudSim package. It should be called
-							// before creating any entities.
+							// CloudSim initialization parameters:
+							// num_user   : logical user entities (e.g., brokers)
+							// calendar   : base reference time
+							// trace_flag : enable detailed event tracing (false for performance)
+							// last param : min event time granularity (seconds)
 							int num_user = 2;   // number of grid users
 							Calendar calendar = Calendar.getInstance();
 							boolean trace_flag = false;  // mean trace events
@@ -141,22 +157,24 @@ public class MainApp {
 							// Initialize the CloudSim library
 							CloudSim.init(num_user, calendar, trace_flag, 0.01);
 	
-							// Generate EdgeCloudsim Scenario Factory
+							// Build scenario-specific factory (mobility, network, orchestrator, etc.)
 							ScenarioFactory sampleFactory = new SampleScenarioFactory(j,SS.getSimulationTime(), orchestratorPolicy, simScenario);
 	
-							// Generate EdgeCloudSim Simulation Manager
+							// Create simulation manager to wire entities and drive event scheduling
 							SimManager manager = new SimManager(sampleFactory, j, simScenario, orchestratorPolicy);
 	
-							// Start simulation
+							// Start discrete-event simulation (blocking until completion)
 							manager.startSimulation();
 						}
 						catch (Exception e)
 						{
+							// Fail fast on unexpected errors to avoid corrupt output aggregation
 							SimLogger.printLine("The simulation has been terminated due to an unexpected error");
 							e.printStackTrace();
 							System.exit(0);
 						}
 	
+						// Log per-scenario elapsed wall-clock duration
 						Date ScenarioEndDate = Calendar.getInstance().getTime();
 						now = df.format(ScenarioEndDate);
 						SimLogger.printLine("Scenario finished at " + now +  ". It took " + SimUtils.getTimeDifference(ScenarioStartDate,ScenarioEndDate));
@@ -166,6 +184,7 @@ public class MainApp {
 			}//End of mobile devices loop
 		}//End of iteration loop
 
+		// Final summary: total wall-clock time across all iterations
 		Date SimulationEndDate = Calendar.getInstance().getTime();
 		now = df.format(SimulationEndDate);
 		SimLogger.printLine("Simulation finished at " + now +  ". It took " + SimUtils.getTimeDifference(SimulationStartDate,SimulationEndDate));

@@ -35,6 +35,15 @@ public class SampleNetworkModel extends NetworkModel {
 	private int[] wanClients;
 	private int[] wlanClients;
 	
+	// Overview:
+	// - Maintains active session counts per WLAN and WAN (and MAN aggregate) to map contention -> throughput.
+	// - Uses empirical per-user aggregate throughput tables (experimentalWlanDelay / experimentalWanDelay) in Kbps.
+	// - MAN (edge<->edge relay) modeled as a constant internal LAN delay from SimSettings.
+	// - WLAN/WAN assumed symmetric (upload == download throughput).
+	// Delay formula: seconds = (dataSize_KB * 8 bits) / throughput_Kbps
+	// WLAN multiplier (/3): empirical table based on 802.11n; scaled to approximate 802.11ac speed gains.
+	// Failure semantics: if user count exceeds table bounds, result stays 0 => interpreted as bandwidth failure upstream.
+
 	public static final double[] experimentalWlanDelay = {
 		/*1 Client*/ 88040.279 /*(Kbps)*/,
 		/*2 Clients*/ 45150.982 /*(Kbps)*/,
@@ -168,17 +177,24 @@ public class SampleNetworkModel extends NetworkModel {
 	};
 	
 	public SampleNetworkModel(int _numberOfMobileDevices, String _simScenario) {
+		// Delegate to base class (stores device count & scenario label)
 		super(_numberOfMobileDevices, _simScenario);
 	}
 
 	@Override
 	public void initialize() {
+		// Arrays sized by #edge datacenters (one AP per datacenter location).
+		// manClients is scalar because MAN modeled as a single shared resource.
 		wanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 		wlanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 	}
 
     /**
-    * source device is always mobile device in our simulation scenarios!
+    * Upload direction: source is always a mobile device.
+    * Branches:
+    *  - MAN relay (edge<->edge placeholder): constant internal LAN delay
+    *  - To Cloud: WAN empirical table
+    *  - To Edge AP: WLAN empirical table
     */
 	@Override
 	public double getUploadDelay(int sourceDeviceId, int destDeviceId, Task task) {
@@ -204,7 +220,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 
     /**
-    * destination device is always mobile device in our simulation scenarios!
+    * Download direction: destination is always the mobile device.
+    * Mirrors upload logic with MAN shortcut and WAN/WLAN selection.
     */
 	@Override
 	public double getDownloadDelay(int sourceDeviceId, int destDeviceId, Task task) {
@@ -231,6 +248,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadStarted(Location accessPointLocation, int destDeviceId) {
+		// Increment active session counters; each start must pair with a finished for accuracy.
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]++;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -245,6 +263,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadFinished(Location accessPointLocation, int destDeviceId) {
+		// Decrement counters; negative values would indicate logic inconsistency (not explicitly checked).
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]--;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -259,6 +278,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void downloadStarted(Location accessPointLocation, int sourceDeviceId) {
+		// Increment active session counters; each start must pair with a finished for accuracy.
 		if(sourceDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]++;
 		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -273,6 +293,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void downloadFinished(Location accessPointLocation, int sourceDeviceId) {
+		// Decrement counters; negative values would indicate logic inconsistency (not explicitly checked).
 		if(sourceDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]--;
 		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -286,6 +307,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 
 	private double getWlanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Convert KB -> Kb, divide by scaled empirical throughput.
+		// If user count >= table size, returns 0 (signals bandwidth failure).
 		int numOfWlanUser = wlanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -297,12 +320,13 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wlan upload and download delay is symmetric in this model
+	// WLAN upload treated as symmetric.
 	private double getWlanUploadDelay(Location accessPointLocation, double dataSize) {
 		return getWlanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
 	private double getWanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Similar to WLAN calculation but uses WAN table directly (no scaling factor).
 		int numOfWanUser = wanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -315,13 +339,14 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wan upload and download delay is symmetric in this model
+	// WAN upload treated as symmetric.
 	private double getWanUploadDelay(Location accessPointLocation, double dataSize) {
 		return getWanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
 	
 	private double getManDownloadDelay() {
+		// Constant MAN latency (could be replaced by queueing model for realism).
 		return SimSettings.getInstance().getInternalLanDelay();
 	}
 	

@@ -32,8 +32,13 @@ public class SampleCpuUtilizationModel implements UtilizationModel {
 	 * (non-Javadoc)
 	 * @see cloudsim.power.UtilizationModel#getUtilization(double)
 	 */
+	// VM CPU utilization model:
+	// - Predicts utilization percentage per task as (taskLength / vmMips) * 100.
+	// - getUtilization(time) ignores 'time' (static estimate used by placement).
+	// - Scenario-specific simplification (no time-varying profile).
 	@Override
 	public double getUtilization(double time) {
+		// Fetch bound VM via task association then compute deterministic estimate
 		Vm vm = SimManager.getInstance().getMobileDeviceManager().getVmList().get(task.getAssociatedVmId());
 		
 		return predictUtilization(vm);
@@ -44,6 +49,10 @@ public class SampleCpuUtilizationModel implements UtilizationModel {
 	}
 	
 	public double predictUtilization(Vm vm){
+		// NOTE: If (taskLength / vmMips) > 1, utilization can exceed 100%.
+		// Clamp externally if scheduler / placement assumes <=100 bounds.
+		// Linear mapping: proportion of VM capacity consumed by total instruction length
+		// NOTE: Assumes single task perspective or average share; no overlap modeling
 		/**
 		 * This scenario is configured as the CPU utilization is 100 * taskSize / edgeCapacity
 		 * For example,

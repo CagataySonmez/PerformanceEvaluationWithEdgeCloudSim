@@ -49,12 +49,15 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	List<Integer> randomMIPS;
 
 	public SampleEdgeServerManager(String _simScenario) {
+		// Manager builds edge hosts according to scenario-driven capacity distribution strategy.
 		hostIdCounter = 0;
 		simScenario = _simScenario;
 	}
 
 	@Override
 	public void initialize() {
+		// Pool used only in RANDOM_CAPACITY scenario. Each value consumed exactly once.
+		// NOTE: Ensure the count matches number of hosts defined in XML.
 		randomMIPS = new ArrayList<Integer>();
 		randomMIPS.add(10000);
 		randomMIPS.add(10000);
@@ -85,6 +88,8 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 
 	public void createVmList(int brokerId){
+		// One VM list per host; VMs inside a host equally share host MIPS (simple static partition).
+		// TODO: Consider using dynamic share based on active task load instead of static division.
 		int hostCounter=0;
 		int vmCounter=0;
 		
@@ -116,8 +121,10 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 					
 					/**
 					 * In this scenario each VM equally shares the MIPS value of corresponding Host
+					 * WARNING: getHostList().get(0) always chooses the first host of the datacenter.
+					 * If multiple hosts per datacenter are expected, replace with proper index mapping.
 					 */
-					Host host = getDatacenterList().get(i).getHostList().get(0);
+					Host host = getDatacenterList().get(i).getHostList().get(0); // TODO: map hostCounter to correct host
 					mips = host.getMaxAvailableMips() / vmNodeList.getLength();
 					
 					//VM Parameters		
@@ -192,7 +199,10 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 	
 	private List<EdgeHost> createHosts(Element datacenterElement){
-
+		// Builds hosts from XML, assigning capacity based on scenario:
+		// EQUAL_CAPACITY -> uniform MIPS
+		// RANDOM_CAPACITY -> random draw from predefined pool
+		// TRAFFIC_HEURISTIC -> heuristic mapping based on road segment type (placeTypeIndex)
 		// Here are the steps needed to create a PowerDatacenter:
 		// 1. We need to create a list to store one or more Machines
 		List<EdgeHost> hostList = new ArrayList<EdgeHost>();
@@ -221,10 +231,13 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 			 * Each scenario allocates this value to edge hosts at different rates
 			 */
 			if(simScenario.equals("EQUAL_CAPACITY")) {
+				// Uniform capacity for all hosts. Adjust to keep total system MIPS consistent across scenarios.
 				mips = 20000;
 			}
 			else if(simScenario.equals("RANDOM_CAPACITY")) {
+				// Randomly assign one unused MIPS value; ensures reproducible total if seed fixed externally.
 				if(randomMIPS.isEmpty()) {
+					// Defensive check: XML host count must not exceed pool size.
 					SimLogger.printLine("Impossible is occurred, ramdom mips list is empty! The simulation has been terminated.");
 					System.exit(0);
 				}
@@ -233,6 +246,7 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 				mips = randomMIPS.remove(randomIndex);
 			}
 			else if(simScenario.equals("TRAFFIC_HEURISTIC")) {
+				// Heuristic: slower traffic zones allocated higher compute to absorb denser task arrivals.
 				switch (placeTypeIndex) {
 				//There is only one section with type 1 on the road
 				//The average speed of vehicles on these sections of the road is 20
@@ -253,11 +267,13 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 					break;
 				}
 				default:
+					// Unknown mapping implies XML mismatch or new type not integrated.
 					SimLogger.printLine("Unknown place type! The simulation has been terminated.");
 					System.exit(0);
 				}
 			}
 			else {
+				// Scenario label not recognized. Validate config file field 'simScenario'.
 				SimLogger.printLine("Unknown simulation scenario! The simulation has been terminated.");
 				System.exit(0);
 			}
@@ -282,7 +298,7 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 					peList,
 					new VmSchedulerSpaceShared(peList)
 				);
-			
+			// Location ties host to WLAN id and spatial coordinates for proximity calculations.
 			host.setPlace(new Location(placeTypeIndex, wlan_id, x_pos, y_pos));
 			hostList.add(host);
 			hostIdCounter++;

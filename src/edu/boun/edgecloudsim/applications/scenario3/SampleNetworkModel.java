@@ -29,25 +29,25 @@ import edu.boun.edgecloudsim.utils.SimLogger;
 public class SampleNetworkModel extends NetworkModel {
 	public static enum NETWORK_TYPE {WLAN, LAN};
 	public static enum LINK_TYPE {DOWNLOAD, UPLOAD};
-	public static double MAN_BW = 1300*1024; //Kbps
+	public static double MAN_BW = 1300*1024; //Kbps effective MAN bandwidth (shared)
 
 	@SuppressWarnings("unused")
-	private int manClients;
+	private int manClients; // concurrent MAN relay sessions (aggregate)
 	private int[] wanClients;
 	private int[] wlanClients;
 	
-	private double lastMM1QueueUpdateTime;
-	private double ManPoissonMeanForDownload; //seconds
-	private double ManPoissonMeanForUpload; //seconds
+	private double lastMM1QueueUpdateTime; // last time we reset MAN statistics
+	private double ManPoissonMeanForDownload; // average inter-arrival (s) for MAN downloads (adaptive)
+	private double ManPoissonMeanForUpload;   // average inter-arrival (s) for MAN uploads (adaptive)
 
-	private double avgManTaskInputSize; //bytes
-	private double avgManTaskOutputSize; //bytes
+	private double avgManTaskInputSize;  // average MAN task input size (KB) over last window
+	private double avgManTaskOutputSize; // average MAN task output size (KB) over last window
 
 	//record last n task statistics during MM1_QUEUE_MODEL_UPDATE_INTEVAL seconds to simulate mmpp/m/1 queue model
-	private double totalManTaskInputSize;
-	private double totalManTaskOutputSize;
-	private double numOfManTaskForDownload;
-	private double numOfManTaskForUpload;
+	private double totalManTaskInputSize;     // cumulative input KB this window
+	private double totalManTaskOutputSize;    // cumulative output KB this window
+	private double numOfManTaskForDownload;   // download task count this window
+	private double numOfManTaskForUpload;     // upload task count this window
 	
 	public static final double[] experimentalWlanDelay = {
 		/*1 Client*/ 88040.279 /*(Kbps)*/,
@@ -187,6 +187,9 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void initialize() {
+		// Initialize per-AP arrays (one AP per edge datacenter)
+		// Derive initial MAN queue means from task lookup table (weighted by usage percentages)
+		// Assumption: half tasks initially traverse MAN (factor 4 used as heuristic scaling)
 		wanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 		wlanClients = new int[SimSettings.getInstance().getNumOfEdgeDatacenters()];  //we have one access point for each datacenter
 
@@ -214,6 +217,7 @@ public class SampleNetworkModel extends NetworkModel {
 		avgManTaskInputSize = avgManTaskInputSize/numOfApp;
 		avgManTaskOutputSize = avgManTaskOutputSize/numOfApp;
 		
+		// Initialize rolling window statistics
 		lastMM1QueueUpdateTime = SimSettings.CLIENT_ACTIVITY_START_TIME;
 		totalManTaskOutputSize = 0;
 		numOfManTaskForDownload = 0;
@@ -226,6 +230,10 @@ public class SampleNetworkModel extends NetworkModel {
     */
 	@Override
 	public double getUploadDelay(int sourceDeviceId, int destDeviceId, Task task) {
+		// Decision tree:
+		//   MAN relay (edge->edge placeholder id pair)
+		//   Mobile -> Cloud (WAN)
+		//   Mobile -> Edge (WLAN)
 		double delay = 0;
 		
 		//special case for man communication
@@ -252,6 +260,10 @@ public class SampleNetworkModel extends NetworkModel {
     */
 	@Override
 	public double getDownloadDelay(int sourceDeviceId, int destDeviceId, Task task) {
+		// Decision tree mirrors upload:
+		//   MAN relay
+		//   Cloud -> Mobile (WAN)
+		//   Edge -> Mobile (WLAN)
 		double delay = 0;
 		
 		//special case for man communication
@@ -275,6 +287,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadStarted(Location accessPointLocation, int destDeviceId) {
+		// Increment contention counters; must have matching uploadFinished for integrity
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]++;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -289,6 +302,7 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void uploadFinished(Location accessPointLocation, int destDeviceId) {
+		// Decrement counters; negative values would signal a logic bug
 		if(destDeviceId == SimSettings.CLOUD_DATACENTER_ID)
 			wanClients[accessPointLocation.getServingWlanId()]--;
 		else if (destDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
@@ -303,33 +317,17 @@ public class SampleNetworkModel extends NetworkModel {
 
 	@Override
 	public void downloadStarted(Location accessPointLocation, int sourceDeviceId) {
-		if(sourceDeviceId == SimSettings.CLOUD_DATACENTER_ID)
-			wanClients[accessPointLocation.getServingWlanId()]++;
-		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
-			wlanClients[accessPointLocation.getServingWlanId()]++;
-		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID+1)
-			manClients++;
-		else {
-			SimLogger.printLine("Error - unknown device id in downloadStarted(). Terminating simulation...");
-			System.exit(0);
-		}
+		// ...existing code...
 	}
 
 	@Override
 	public void downloadFinished(Location accessPointLocation, int sourceDeviceId) {
-		if(sourceDeviceId == SimSettings.CLOUD_DATACENTER_ID)
-			wanClients[accessPointLocation.getServingWlanId()]--;
-		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID)
-			wlanClients[accessPointLocation.getServingWlanId()]--;
-		else if(sourceDeviceId == SimSettings.GENERIC_EDGE_DEVICE_ID+1)
-			manClients--;
-		else {
-			SimLogger.printLine("Error - unknown device id in downloadFinished(). Terminating simulation...");
-			System.exit(0);
-		}
+		// ...existing code...
 	}
 
 	private double getWlanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// Convert KB -> Kb and divide by empirical throughput (scaled by 3 for 802.11ac approximation)
+		// Returns 0 if user index exceeds table => treated as bandwidth failure upstream
 		int numOfWlanUser = wlanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -341,12 +339,13 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wlan upload and download delay is symmetric in this model
 	private double getWlanUploadDelay(Location accessPointLocation, double dataSize) {
+		// Symmetric with download
 		return getWlanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
 	private double getWanDownloadDelay(Location accessPointLocation, double dataSize) {
+		// WAN throughput lookup (no scaling factor)
 		int numOfWanUser = wanClients[accessPointLocation.getServingWlanId()];
 		double taskSizeInKb = dataSize * (double)8; //KB to Kb
 		double result=0;
@@ -359,12 +358,19 @@ public class SampleNetworkModel extends NetworkModel {
 		return result;
 	}
 	
-	//wan upload and download delay is symmetric in this model
 	private double getWanUploadDelay(Location accessPointLocation, double dataSize) {
+		// Symmetric with download
 		return getWanDownloadDelay(accessPointLocation, dataSize);
 	}
 	
-	private double calculateMM1(double propagationDelay, double bandwidth /*Kbps*/, double PoissonMean, double avgTaskSize /*KB*/, int deviceCount){
+	private double calculateMM1(double propagationDelay, double bandwidth /*Kbps*/, double PoissonMean,
+	                            double avgTaskSize /*KB*/, int deviceCount){
+		// M/M/1 delay approximation:
+		//   λ = 1/PoissonMean (tasks/s) * deviceCount (aggregate arrival rate)
+		//   μ = bandwidth(Kbps) / avgTaskSize(Kb)
+		//   Expected system time = 1 / (μ - λ)
+		// Add propagation delay then cap excessive (>15s) delays to 0 to indicate failure.
+		// Negative (μ <= λ) => saturated -> return 0 (failure)
 		double mu=0, lamda=0;
 		
 		avgTaskSize = avgTaskSize * 8; //convert from KB to Kb
@@ -382,6 +388,8 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 	
 	private double getManDownloadDelay() {
+		// Use adaptive parameters to compute current MAN download delay
+		// Update rolling statistics for next interval adaptation
 		double result = calculateMM1(SimSettings.getInstance().getInternalLanDelay(),
 				MAN_BW,
 				ManPoissonMeanForDownload,
@@ -397,6 +405,7 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 	
 	private double getManUploadDelay() {
+		// Symmetric logic for MAN upload path
 		double result = calculateMM1(SimSettings.getInstance().getInternalLanDelay(),
 				MAN_BW,
 				ManPoissonMeanForUpload,
@@ -412,6 +421,9 @@ public class SampleNetworkModel extends NetworkModel {
 	}
 	
 	public void updateMM1QueeuModel(){
+		// Recompute Poisson means and average sizes based on window statistics.
+		// Avoid division by zero by checking task counts.
+		// Reset window accumulators for next period.
 		double lastInterval = CloudSim.clock() - lastMM1QueueUpdateTime;
 		lastMM1QueueUpdateTime = CloudSim.clock();
 		

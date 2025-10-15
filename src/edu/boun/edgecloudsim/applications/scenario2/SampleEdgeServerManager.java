@@ -41,11 +41,20 @@ import edu.boun.edgecloudsim.edge_server.EdgeVM;
 import edu.boun.edgecloudsim.edge_server.EdgeVmAllocationPolicy_Custom;
 import edu.boun.edgecloudsim.utils.Location;
 
+// Responsibilities:
+// - Parse edge_devices.xml to instantiate Datacenters, Hosts, and Edge VMs
+// - Provide VM lists per host for orchestrator placement decisions
+// - Expose aggregate and per-host utilization metrics (CPU %) used by heuristics
+// Assumptions:
+// - One logical WLAN zone per datacenter location (servingWlanId == hostId mapping elsewhere)
+// - Bandwidth is evenly split among hosts / VMs using simple division (no dynamic sharing model)
+// Extension points: override createVmList or createHosts for custom provisioning policies.
+
 public class SampleEdgeServerManager extends EdgeServerManager{
-	private int hostIdCounter;
+	private int hostIdCounter; // globally unique incremental host id across all datacenters
 
 	public SampleEdgeServerManager() {
-		hostIdCounter = 0;
+		hostIdCounter = 0; // reset for each simulation run
 	}
 
 	@Override
@@ -54,10 +63,12 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 
 	@Override
 	public VmAllocationPolicy getVmAllocationPolicy(List<? extends Host> hostList, int dataCenterIndex) {
+		// Custom allocation policy governs initial VM placement / migration decisions
 		return new EdgeVmAllocationPolicy_Custom(hostList,dataCenterIndex);
 	}
 	
 	public void startDatacenters() throws Exception{
+		// Parse <datacenter> nodes and build each datacenter with its host list
 		Document doc = SimSettings.getInstance().getEdgeDevicesDocument();
 		NodeList datacenterList = doc.getElementsByTagName("datacenter");
 		for (int i = 0; i < datacenterList.getLength(); i++) {
@@ -68,6 +79,8 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 
 	public void createVmList(int brokerId){
+		// Iterate datacenters -> hosts -> VMs defined in XML and instantiate EdgeVM objects
+		// Bandwidth heuristic: total WLAN BW divided by (numHosts + numVMs) to cap per-VM share
 		int hostCounter=0;
 		int vmCounter=0;
 		
@@ -108,13 +121,15 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 	
 	public void terminateDatacenters(){
+		// Gracefully shut down all local datacenters (cleanup in CloudSim)
 		for (Datacenter datacenter : localDatacenters) {
 			datacenter.shutdownEntity();
 		}
 	}
 
-	//average utilization of all VMs
+	// Average CPU utilization across all VMs in all datacenters (0..1)
 	public double getAvgUtilization(){
+		// Accumulate current scheduler utilization per VM at simulation clock time
 		double totalUtilization = 0;
 		double vmCounter = 0;
 		
@@ -136,6 +151,7 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 	
 	public double getAvgHostUtilization(int hostIndex){
+		// Average utilization of a single host (mean of its VMs)
 		double totalUtilization = 0;
 		double vmCounter = 0;
 		
@@ -150,6 +166,8 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 
 	private Datacenter createDatacenter(int index, Element datacenterElement) throws Exception{
+		// Extract datacenter-level attributes + cost model from XML
+		// Build host list first, then wrap into DatacenterCharacteristics
 		String arch = datacenterElement.getAttribute("arch");
 		String os = datacenterElement.getAttribute("os");
 		String vmm = datacenterElement.getAttribute("vmm");
@@ -182,7 +200,8 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 	}
 	
 	private List<EdgeHost> createHosts(Element datacenterElement){
-
+		// Parse <host> nodes; each host defines core count, mips, ram, storage, bandwidth slice
+		// Location metadata (attractiveness, coordinates, wlan_id) bound to each host for mobility mapping
 		// Here are the steps needed to create a PowerDatacenter:
 		// 1. We need to create a list to store one or more Machines
 		List<EdgeHost> hostList = new ArrayList<EdgeHost>();

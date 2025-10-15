@@ -21,6 +21,7 @@ import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimUtils;
 
 public class SampleMobilityModel extends MobilityModel {
+	// SPEED_FOR_PLACES[index] = km/h associated with attractiveness level (0..2)
 	private final double SPEED_FOR_PLACES[] = {20, 40, 60}; //km per hour
 
 	private int lengthOfSegment;
@@ -35,6 +36,13 @@ public class SampleMobilityModel extends MobilityModel {
 	private double[] timeToDriveLocationArray;//in seconds unit
 	private double[] timeToReachNextLocationArray; //in seconds unit
 
+	// Model summary:
+	// - Linear circular road composed of contiguous segments (one per datacenter).
+	// - Each segment length inferred from first location's x_pos (assumed uniform).
+	// - Vehicle speed depends on location attractiveness (mapped via SPEED_FOR_PLACES).
+	// - Precomputes initial position, segment index, and time to next boundary per device
+	//   to keep getLocation() O(number_of_crossed_segments) instead of O(total_segments).
+
 	public SampleMobilityModel(int _numberOfMobileDevices, double _simulationTime) {
 		super(_numberOfMobileDevices, _simulationTime);
 		// TODO Auto-generated constructor stub
@@ -42,6 +50,7 @@ public class SampleMobilityModel extends MobilityModel {
 
 	@Override
 	public void initialize() {
+		// Derive segment length from first datacenter's x_pos (road mirrored => *2)
 		//Find total length of the road
 		Document doc = SimSettings.getInstance().getEdgeDevicesDocument();
 		NodeList datacenterList = doc.getElementsByTagName("datacenter");
@@ -78,10 +87,17 @@ public class SampleMobilityModel extends MobilityModel {
 					(double)(lengthOfSegment - (initialPositionArray[i] % lengthOfSegment))) /
 					(SPEED_FOR_PLACES[locationTypes[initialLocationIndexArray[i]]]);
 		}
+		// Preallocation below trades memory for O(1) reuse during getLocation().
+		// Remove arrays and recompute on demand if memory footprint becomes critical for very large device counts.
 	}
 
 	@Override
 	public Location getLocation(int deviceId, double time) {
+		// time: simulation seconds since start
+		// Phase 1: still within first partial segment? Use initial offset.
+		// Phase 2: advance whole segments using modulo of loop time, subtract segment times.
+		// Linear interpolation inside current segment: distance = speed(km/h)*time / 3.6
+
 		int ofset = 0;
 		double remainingTime = 0;
 
@@ -96,7 +112,10 @@ public class SampleMobilityModel extends MobilityModel {
 			remainingTime = (time - timeToReachNextLocation) % totalTimeForLoop;
 			locationIndex = (locationIndex+1) % locationTypes.length;
 
+			// When time surpasses first boundary, modulo arithmetic ensures cyclic wrap (ring road).
+			// Loop below may traverse multiple segments if remainingTime spans >1 segment (high speed or long time jump).
 			while(remainingTime > timeToDriveLocationArray[locationIndex]) {
+				// Decrement remainingTime until we locate current segment.
 				remainingTime -= timeToDriveLocationArray[locationIndex];
 				locationIndex =  (locationIndex+1) % locationTypes.length;
 			}
@@ -104,9 +123,10 @@ public class SampleMobilityModel extends MobilityModel {
 			ofset = locationIndex * lengthOfSegment;
 		}
 
+		// x_pos computed as starting offset of segment plus distance progressed in current segment.
+		// y dimension is fixed (0) in this linear scenario model.
 		int x_pos = (int) (ofset + ( (SPEED_FOR_PLACES[locationTypes[locationIndex]] * remainingTime) / (double)3.6));
 
 		return new Location(locationTypes[locationIndex], locationIndex, x_pos, 0);
 	}
-
 }
