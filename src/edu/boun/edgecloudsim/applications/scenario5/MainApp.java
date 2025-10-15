@@ -72,8 +72,9 @@ public class MainApp {
 			// -> iteration value to run a specific iteration
 			// -> iteration Start/End value to run multiple iterations at a time
 			//    in this case start shall be less than or equal to end value
-			iterationStart = 1;
-			iterationEnd = 10;
+			int iteration = 1;
+			iterationStart = iteration;
+			iterationEnd = iteration;
 		}
 
 		//load settings from configuration file

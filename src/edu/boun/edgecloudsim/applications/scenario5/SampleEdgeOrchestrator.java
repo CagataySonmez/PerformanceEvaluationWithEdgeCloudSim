@@ -18,7 +18,6 @@ import org.cloudbus.cloudsim.Vm;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.SimEvent;
 
-import edu.boun.edgecloudsim.applications.scenario4.SampleCpuUtilizationModel;
 import edu.boun.edgecloudsim.core.SimManager;
 import edu.boun.edgecloudsim.core.SimSettings;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
@@ -29,7 +28,6 @@ import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimUtils;
 
 public class SampleEdgeOrchestrator extends EdgeOrchestrator {
-	private int numberOfHost; //used by load balancer
 	
 	public SampleEdgeOrchestrator(String _policy, String _simScenario) {
 		super(_policy, _simScenario);
@@ -37,7 +35,6 @@ public class SampleEdgeOrchestrator extends EdgeOrchestrator {
 
 	@Override
 	public void initialize() {
-		numberOfHost=SimSettings.getInstance().getNumOfEdgeHosts();
 	}
 
 	@Override
