@@ -124,7 +124,7 @@ public class SampleEdgeServerManager extends EdgeServerManager{
 					 * WARNING: getHostList().get(0) always chooses the first host of the datacenter.
 					 * If multiple hosts per datacenter are expected, replace with proper index mapping.
 					 */
-					Host host = getDatacenterList().get(i).getHostList().get(0); // TODO: map hostCounter to correct host
+					Host host = getDatacenterList().get(i).getHostList().get(0);
 					mips = host.getMaxAvailableMips() / vmNodeList.getLength();
 					
 					//VM Parameters		

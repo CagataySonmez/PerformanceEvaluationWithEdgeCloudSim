@@ -49,8 +49,6 @@ public class SampleCpuUtilizationModel implements UtilizationModel {
 	}
 	
 	public double predictUtilization(Vm vm){
-		// NOTE: If (taskLength / vmMips) > 1, utilization can exceed 100%.
-		// Clamp externally if scheduler / placement assumes <=100 bounds.
 		// Linear mapping: proportion of VM capacity consumed by total instruction length
 		// NOTE: Assumes single task perspective or average share; no overlap modeling
 		/**
